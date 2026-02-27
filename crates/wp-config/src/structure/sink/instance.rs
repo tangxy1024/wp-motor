@@ -9,9 +9,9 @@ use orion_conf::{ErrorOwe, ErrorWith, ToStructError};
 use orion_error::{ContextRecord, OperationContext, UvsValidationFrom};
 use orion_variate::EnvEvaluable;
 use serde::{Deserialize, Serialize};
-use winnow::stream::ToUsize;
 use std::fs;
 use std::path::Path;
+use winnow::stream::ToUsize;
 use wp_conf_base::ConfParser;
 use wp_connector_api::{ParamMap, Tags};
 use wp_log::{debug_ctrl, info_ctrl};
@@ -178,11 +178,11 @@ impl SinkInstanceConf {
     }
 
     pub fn batch_size(&self) -> usize {
-        let mut batch_size=default_batch_size();
+        let mut batch_size = default_batch_size();
         if let Some(buffer_size) = self.core.params.get("batch_size")
             && let Some(size) = buffer_size.as_u64()
         {
-            batch_size= size.to_usize();
+            batch_size = size.to_usize();
         }
         batch_size
     }

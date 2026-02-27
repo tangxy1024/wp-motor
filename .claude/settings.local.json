@@ -30,7 +30,8 @@
       "Bash(while read hash msg)",
       "Bash(do echo \"=== $msg ===\")",
       "Bash(git diff-tree:*)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(rg:*)"
     ]
   }
 }

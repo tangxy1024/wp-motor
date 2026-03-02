@@ -1,10 +1,10 @@
 use crate::facade::test_helpers::SinkTerminal;
 use crate::runtime::actor::command::{CmdSubscriber, TaskController, TaskEndReason};
 use crate::sinks::{ProcMeta, RescueEntry, RescuePayload, SinkRouteAgent};
-use wp_connector_api::{SinkError, SinkReason, SinkResult};
 use crate::stat::metric_collect::MetricCollectors;
 use crate::stat::{MonSend, STAT_INTERVAL_MS};
 use chrono::NaiveDateTime;
+use wp_connector_api::{SinkError, SinkReason, SinkResult};
 
 use wp_error::RunErrorOwe;
 use wp_error::run_error::RunResult;
@@ -137,7 +137,13 @@ impl ActCovPicker {
             sink_agents.len()
         );
         match self
-            .pick_file(sink_agents, &paths, self.speed_limit, check_point, stat_reqs)
+            .pick_file(
+                sink_agents,
+                &paths,
+                self.speed_limit,
+                check_point,
+                stat_reqs,
+            )
             .await?
         {
             TaskEndReason::SucEnded => {

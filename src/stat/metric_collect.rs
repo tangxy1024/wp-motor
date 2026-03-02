@@ -4,9 +4,9 @@ use wp_stat::DataDim;
 use wp_stat::StatRecorder;
 use wp_stat::StatReq;
 
+use std::collections::HashMap;
 use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::error::TrySendError;
-use std::collections::HashMap;
 use wp_data_fmt::{Raw, RecordFormatter};
 use wp_model_core::model::DataRecord;
 use wp_stat::ReportVariant;
@@ -283,7 +283,6 @@ fn fast_now() -> chrono::NaiveDateTime {
     Local::now().naive_local()
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,7 +292,11 @@ mod tests {
     fn none_input_still_records_when_collect_fields_present() {
         let mut collectors = MetricCollectors::new(
             "ruleA".to_string(),
-            vec![StatReq::simple_test(StatTarget::All, vec!["k".to_string()], 10)],
+            vec![StatReq::simple_test(
+                StatTarget::All,
+                vec!["k".to_string()],
+                10,
+            )],
         );
 
         collectors.record_begin("ruleA", None);

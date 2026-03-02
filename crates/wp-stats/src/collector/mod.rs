@@ -132,22 +132,23 @@ impl StatRecorder<&str> for StatCollector {
 }
 
 impl StatRecorder<()> for StatCollector {
-    fn record_begin(&mut self, rule_key: &str, dat_key: ()) {
-        let _ = dat_key;
+    fn record_begin(&mut self, rule_key: &str, _: ()) {
         self.rec_beg_unit_impl(rule_key);
     }
-    fn record_end(&mut self, rule_key: &str, dat_key: ()) {
-        let _ = dat_key;
+    fn record_end(&mut self, rule_key: &str, _: ()) {
         self.rec_end_unit_impl(rule_key);
     }
-    fn record_task(&mut self, rule_key: &str, dat_key: ()) {
-        let _ = dat_key;
+    fn record_task(&mut self, rule_key: &str, _: ()) {
         self.rec_beg_end_unit_impl(rule_key);
     }
 }
 
 impl StatCollector {
-    fn collect_from_cache(&self, cache: StatCache, finalize_at: Option<NaiveDateTime>) -> StatReport {
+    fn collect_from_cache(
+        &self,
+        cache: StatCache,
+        finalize_at: Option<NaiveDateTime>,
+    ) -> StatReport {
         let mut data = Vec::with_capacity(cache.len());
         match &self.require.target {
             crate::StatTarget::All => {

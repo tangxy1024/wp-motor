@@ -57,7 +57,7 @@ async fn actor_workflows_process_http_logs_with_base64_decoding() -> AnyResult<(
     let (monitor_sender, _monitor_receiver) = mpsc::channel(1000);
 
     // Configure data subscription
-    let subscription_channel = ParseWorkerSender::new(data_sender);
+    let subscription_channel = ParseWorkerSender::new(data_sender.clone());
     let source_key = "/test_pkg/test";
 
     // Read and process input data
@@ -71,6 +71,8 @@ async fn actor_workflows_process_http_logs_with_base64_decoding() -> AnyResult<(
     )
     .await;
     println!("Read data result: {:?}", read_result);
+    // Close input channel so the parser can terminate once buffered events are drained.
+    drop(data_sender);
 
     // Setup data processing pipeline
     let mut processing_pipeline: FormatAdapter<BufferMonitor> = FormatAdapter::new(TextFmt::Json);

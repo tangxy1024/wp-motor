@@ -1,7 +1,7 @@
 use crate::connectors::registry;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{EnvTomlLoad, ErrorOwe, ErrorWith};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use serde_derive::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -59,19 +59,12 @@ impl SourceConfigParser {
             let core: wp_specs::CoreSourceSpec = (&item).into();
             let connector_id = item.connector_id.clone().unwrap_or_default();
             let resolved = core_to_resolved_with(&core, connector_id);
-            let fac = registry::get_source_factory(&resolved.kind).ok_or_else(|| {
-                ConfIOReason::from_validation(format!(
-                    "No factory registered for source kind '{}' (source '{}')",
-                    resolved.kind, resolved.name
-                ))
-                .to_err()
-            })?;
-            let svc = fac.build(&resolved, &ctx).await.map_err(|e| {
-                ConfIOReason::from_validation(format!(
-                    "Factory build failed for source '{}' of kind '{}': {}",
-                    resolved.name, resolved.kind, e
-                ))
-            })?;
+            let fac = registry::get_source_factory(&resolved.kind)
+                .ok_or_else(|| ConfIOReason::from_validation().to_err())?;
+            let svc = fac
+                .build(&resolved, &ctx)
+                .await
+                .map_err(|e| ConfIOReason::from_validation())?;
             sources.extend(svc.sources);
             if let Some(acc) = svc.acceptor {
                 acceptors.push(acc);

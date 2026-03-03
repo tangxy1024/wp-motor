@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use orion_conf::ToStructError;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, UvsValidationFrom};
+use orion_error::{ErrorOwe, ErrorWith, UvsFrom};
 use orion_variate::EnvDict;
 
 use wp_conf::connectors::{
@@ -108,11 +108,12 @@ pub fn validate_routes(work_root: &str, env_dict: &EnvDict) -> OrionConfResult<(
             let file_display = rf.path.to_string_lossy();
 
             return Err(
-                ConfIOReason::from_validation(format!(
-                    "FlexGroup configuration validation failed in file '{}': OML and RULE cannot be used together",
-                    file_display
-                ))
-                .err_result()?
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "FlexGroup configuration validation failed in file '{}': OML and RULE cannot be used together",
+                        file_display
+                    )),
             );
         }
 
@@ -123,22 +124,24 @@ pub fn validate_routes(work_root: &str, env_dict: &EnvDict) -> OrionConfResult<(
             if rule_str.is_empty() {
                 let file_display = rf.path.to_string_lossy();
                 return Err(
-                    ConfIOReason::from_validation(format!(
-                        "FlexGroup configuration validation failed in file '{}': Empty rule pattern found",
-                        file_display
-                    ))
-                    .err_result()?
+                    ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!(
+                            "FlexGroup configuration validation failed in file '{}': Empty rule pattern found",
+                            file_display
+                        )),
                 );
             }
 
             if !rule_str.starts_with('/') {
                 let file_display = rf.path.to_string_lossy();
                 return Err(
-                    ConfIOReason::from_validation(format!(
-                        "FlexGroup configuration validation failed in file '{}': rule pattern '{}' should start with '/'",
-                        file_display, rule_str
-                    ))
-                    .err_result()?
+                    ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!(
+                            "FlexGroup configuration validation failed in file '{}': rule pattern '{}' should start with '/'",
+                            file_display, rule_str
+                        )),
                 );
             }
         }
@@ -150,11 +153,12 @@ pub fn validate_routes(work_root: &str, env_dict: &EnvDict) -> OrionConfResult<(
             if oml_str.is_empty() {
                 let file_display = rf.path.to_string_lossy();
                 return Err(
-                    ConfIOReason::from_validation(format!(
-                        "FlexGroup configuration validation failed in file '{}': Empty OML pattern found",
-                        file_display
-                    ))
-                    .err_result()?
+                    ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!(
+                            "FlexGroup configuration validation failed in file '{}': Empty OML pattern found",
+                            file_display
+                        )),
                 );
             }
         }

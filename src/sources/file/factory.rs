@@ -1,7 +1,7 @@
 use super::source::{FileEncoding, FileSource};
 use async_trait::async_trait;
-use orion_conf::{ErrorWith, UvsConfFrom};
-use orion_error::{ToStructError, UvsDataFrom};
+use orion_conf::{ErrorWith, UvsFrom};
+use orion_error::ToStructError;
 use serde_json::json;
 use std::path::Path;
 use wp_conf::connectors::{ConnectorDef, ConnectorScope, ParamMap};
@@ -80,7 +80,7 @@ impl SourceFactory for FileSourceFactory {
             FileSourceSpec::from_resolved(resolved)?;
             Ok(())
         })();
-        res.map_err(|e| SourceReason::from_conf(e.to_string()).to_err())
+        res.map_err(|e| SourceReason::from_conf().to_err())
     }
 
     async fn build(
@@ -92,13 +92,7 @@ impl SourceFactory for FileSourceFactory {
             let spec = FileSourceSpec::from_resolved(resolved)?;
             let tagset = Tags::from_parse(&resolved.tags);
             let ranges = compute_file_ranges(Path::new(&spec.path), spec.instances)
-                .map_err(|e| {
-                    SourceReason::from_data(
-                        format!("Failed to compute file ranges: {}", e),
-                        Some(0),
-                    )
-                    .to_err()
-                })
+                .map_err(|e| SourceReason::from_data().to_err())
                 .with(spec.path.as_str())
                 .want("open source file")?;
             let mut handles = Vec::with_capacity(ranges.len());
@@ -129,7 +123,7 @@ impl SourceFactory for FileSourceFactory {
         };
 
         fut.await
-            .map_err(|e: anyhow::Error| SourceReason::from_conf(e.to_string()).to_err())
+            .map_err(|e: anyhow::Error| SourceReason::from_conf().to_err())
     }
 }
 

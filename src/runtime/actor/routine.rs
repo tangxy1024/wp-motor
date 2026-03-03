@@ -3,7 +3,7 @@ use super::signal::stop_signals;
 use crate::runtime::actor::command::ActorCtrlCmd;
 use crate::runtime::actor::signal::ShutdownCmd;
 use futures_lite::prelude::*;
-use orion_error::{ToStructError, UvsLogicFrom};
+use orion_error::{ToStructError, UvsFrom};
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 use wp_error::{RunReason, run_error::RunResult};
@@ -45,7 +45,7 @@ impl TaskManager {
                 sleep(Duration::from_millis(100)).await;
             }
         } else {
-            Err(RunReason::from_logic("not main routine".to_string()).to_err())
+            Err(RunReason::from_logic().to_err())
         }
     }
     pub async fn all_down_wait_signal_ex(&mut self) -> RunResult<()> {
@@ -68,7 +68,7 @@ impl TaskManager {
             self.h_groups.clear();
             Ok(())
         } else {
-            Err(RunReason::from_logic("not main routine".to_string()).to_err())
+            Err(RunReason::from_logic().to_err())
         }
     }
 }

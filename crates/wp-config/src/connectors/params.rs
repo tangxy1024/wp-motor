@@ -5,7 +5,7 @@
 
 use crate::connectors::ParamMap;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 
 /// Merge connector parameters with user overrides, respecting whitelist.
 ///
@@ -58,12 +58,13 @@ pub fn merge_params(
     for (key, value) in overrides.iter() {
         // Check if parameter is in whitelist
         if !allow_override.iter().any(|allowed| allowed == key) {
-            return ConfIOReason::from_validation(format!(
-                "Parameter override '{}' not allowed. Permitted overrides: [{}]",
-                key,
-                allow_override.join(", ")
-            ))
-            .err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!(
+                    "Parameter override '{}' not allowed. Permitted overrides: [{}]",
+                    key,
+                    allow_override.join(", ")
+                )));
         }
 
         // Merge the override

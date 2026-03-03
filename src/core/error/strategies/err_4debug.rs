@@ -22,7 +22,7 @@ impl Err4Debug {
             //_ => ErrorStg::Tolerant,
             //UniversalReason::LogicError(_) => {}
             //UniversalReason::BizError(_) => {}
-            UvsReason::DataError(_, _) => ErrStrategy::Ignore,
+            UvsReason::DataError => ErrStrategy::Ignore,
             //UniversalReason::SysError(_) => {}
             //UniversalReason::ResError(_) => {}
             //UniversalReason::ConfError(_) => {}

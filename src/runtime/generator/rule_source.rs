@@ -59,7 +59,7 @@ mod tests {
     use crate::core::generator::rules::GenRuleUnit;
     use std::collections::HashMap;
     use wp_model_core::model::FNameStr;
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
     use wpl::generator::{FieldGenBuilder, FieldGenConf};
     use wpl::{WplCode, WplEvaluator, WplPackage};
 

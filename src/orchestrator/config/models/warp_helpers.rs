@@ -3,7 +3,7 @@ use crate::{
     orchestrator::config::loader::WarpConf,
 };
 use anyhow::Result;
-use orion_error::{ErrorConv, ToStructError, UvsConfFrom};
+use orion_error::{ErrorConv, ToStructError, UvsFrom};
 use orion_variate::{EnvDict, EnvEvaluable};
 use std::{env, path::PathBuf};
 use wp_conf::engine::EngineConfig;

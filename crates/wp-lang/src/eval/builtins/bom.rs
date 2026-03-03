@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use wp_parse_api::{PipeProcessor, RawData, WparseResult};
+use wp_model_core::raw::RawData;
+use wp_parse_api::{PipeProcessor, WparseResult};
 
 /// BOM (Byte Order Mark) 清除处理器
 ///

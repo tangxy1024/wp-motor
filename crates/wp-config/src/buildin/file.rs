@@ -3,7 +3,7 @@ use orion_conf::{
     ToStructError,
     error::{ConfIOReason, OrionConfResult},
 };
-use orion_error::UvsValidationFrom;
+use orion_error::UvsFrom;
 use orion_variate::EnvDict;
 use std::path::Path;
 
@@ -34,7 +34,9 @@ impl FileSinkConf {
 impl crate::structure::Validate for FileSinkConf {
     fn validate(&self) -> OrionConfResult<()> {
         if self.path.trim().is_empty() {
-            return ConfIOReason::from_validation("out_file.path must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("out_file.path must not be empty"));
         }
         let p = std::path::Path::new(&self.path);
         if let Some(parent) = p.parent()
@@ -42,11 +44,9 @@ impl crate::structure::Validate for FileSinkConf {
             && !parent.exists()
         {
             std::fs::create_dir_all(parent).map_err(|e| {
-                ConfIOReason::from_validation(format!(
-                    "create parent dir failed: {:?}, err={}",
-                    parent, e
-                ))
-                .to_err()
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!("create parent dir failed: {:?}, err={}", parent, e))
             })?;
         }
         Ok(())
@@ -64,8 +64,11 @@ impl crate::loader::traits::ConfigLoader for FileSinkConf {
 
     fn load_from_str(content: &str, _base: &Path, _dict: &EnvDict) -> OrionConfResult<Self> {
         // FileSinkConf 是一个简单的结构，直接从 TOML 解析即可
-        let conf: FileSinkConf = toml::from_str(content)
-            .map_err(|e| ConfIOReason::from_validation(format!("TOML 解析失败: {}", e)).to_err())?;
+        let conf: FileSinkConf = toml::from_str(content).map_err(|e| {
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("TOML 解析失败: {}", e))
+        })?;
 
         Ok(conf)
     }

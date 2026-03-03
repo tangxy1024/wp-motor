@@ -1,1 +1,2 @@
-use wp_parse_api::{DataResult, RawData, WparseError, WparseReason};
+use wp_model_core::raw::RawData;
+use wp_parse_api::{DataResult, WparseError, WparseReason};

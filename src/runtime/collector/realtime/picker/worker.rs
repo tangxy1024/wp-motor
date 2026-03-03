@@ -303,7 +303,7 @@ mod tests {
     use wp_connector_api::{
         SourceBatch, SourceError, SourceEvent, SourceReason, SourceResult, Tags,
     };
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
     use wp_stat::ReportVariant;
 
     const TEST_MONITOR_CHANNEL_CAP: usize = 4;

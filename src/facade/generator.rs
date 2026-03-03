@@ -23,7 +23,7 @@ pub async fn rule_gen_run(
 
     // Compile rules once; map compile error into RunError (UVS/conf)
     let src = RuleGenSource::from_units(rules)
-        .map_err(|e| RunError::from(RunReason::Uvs(UvsReason::core_conf(e.to_string()))))?;
+        .map_err(|e| RunError::from(RunReason::Uvs(UvsReason::core_conf())))?;
 
     let total = args.gen_conf.total_line.unwrap_or(0);
     if total == 0 {
@@ -45,7 +45,7 @@ pub async fn rule_gen_run(
         let step = batch.min(remain).max(1);
         let rows = src
             .gen_batch(cur, step)
-            .map_err(|e| RunError::from(RunReason::Uvs(UvsReason::core_conf(e.to_string()))))?;
+            .map_err(|e| RunError::from(RunReason::Uvs(UvsReason::core_conf())))?;
         cur = (cur + step) % src.rule_len().max(1);
         for ffv in rows {
             // 将 FmtFieldVec 转换为字符串并调用 sink_str
@@ -77,11 +77,8 @@ pub async fn sample_gen_run(
     // Load all sample lines
     let mut samples: Vec<String> = Vec::new();
     for f in files {
-        let file = std::fs::File::open(&f).map_err(|e| {
-            RunError::from(RunReason::Uvs(orion_error::UvsReason::core_conf(
-                e.to_string(),
-            )))
-        })?;
+        let file = std::fs::File::open(&f)
+            .map_err(|e| RunError::from(RunReason::Uvs(orion_error::UvsReason::core_conf())))?;
         let reader = std::io::BufReader::new(file);
         for s in reader.lines().map_while(Result::ok) {
             samples.push(s);

@@ -143,7 +143,7 @@ impl WPLCodeErrorTrait for StructError<WplCodeReason> {
 /*
 impl From<DataErrKind> for StructError<WplCodeReason> {
     fn from(value: DataErrKind) -> Self {
-        WplCodeReason::from_data(format!("{}", value), None).to_err()
+        WplCodeReason::from_data().to_err()
     }
 }
 */

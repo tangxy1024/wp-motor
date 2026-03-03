@@ -24,13 +24,8 @@ impl WarpConf {
         let specs = parser
             .parse_and_validate_only(&content, dict)
             .map_err(|e| {
-                use orion_error::{ToStructError, UvsConfFrom};
-                wp_error::run_error::RunReason::from_conf(format!(
-                    "Failed to parse unified [[sources]] config: {}\npath: {}",
-                    e,
-                    path.to_string_lossy()
-                ))
-                .to_err()
+                use orion_error::{ToStructError, UvsFrom};
+                wp_error::run_error::RunReason::from_conf().to_err()
             })?;
         let mut out = Vec::new();
         for spec in specs.into_iter() {

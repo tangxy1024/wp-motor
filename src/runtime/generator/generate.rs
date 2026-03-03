@@ -37,7 +37,7 @@ pub async fn rule_gen_run(
     out_io: SinkBackendType,
 ) -> RunResult<()> {
     if rules.is_empty() {
-        return Err(RunReason::from_biz("gen rule is empty!").to_err());
+        return Err(RunReason::from_biz().to_err());
     }
     // 限速为全局语义：当 speed>0 时，将并发限制为 min(parallel, speed)
     let mut g = args.gen_conf.clone();

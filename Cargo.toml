@@ -269,7 +269,7 @@ anyhow = "1.0"
 thiserror = "2.0"
 log = "0.4"
 env_logger = "0.11"
-orion-error = "0.5"
+orion-error = "0.6"
 
 # --- Parsing & Text ---
 winnow = "0.7"
@@ -360,9 +360,9 @@ similar = "2.7"
 rust-crypto = "0.2"
 
 # --- Configuration ---
-orion_conf = { version = "0.4", features = ["yaml", "toml"] }
-orion-sec = "0.3"
-orion-variate = "0.10"
+orion_conf = { version = "0.5", features = ["yaml", "toml"] }
+orion-sec = "0.4"
+orion-variate = "0.11"
 
 # --- Testing ---
 criterion = "0.8"
@@ -391,17 +391,17 @@ wp_stats = { package = "wp-stats", path = "./crates/wp-stats" }
 
 
 # --- External: Open API (Public Interfaces) ---
-wp-connector-api = "0.7"
-wp-parse-api = "0.7"
+wp-connector-api = "0.8"
+wp-parse-api = "0.8"
 wp-model-core = "0.8"
 
 # --- External: Advanced API (Enterprise Features) ---
-wp_ctrl_api = { package = "wp-ctrl-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.0.5-beta" }
-wp_enrich_api = { package = "wp-enrich-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.0.5-beta" }
+wp_ctrl_api = { package = "wp-ctrl-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.1.0" }
+wp_enrich_api = { package = "wp-enrich-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.1.0" }
 
 # --- External: Infrastructure Libraries ---
-wp-log = "0.1"
-wp-error = "0.7"
-wp-specs = "0.7"
-wp-conf-base = "0.1"
+wp-log = "0.2"
+wp-error = "0.8"
+wp-specs = "0.8"
+wp-conf-base = "0.2"
 wp-data-fmt = "0.2"

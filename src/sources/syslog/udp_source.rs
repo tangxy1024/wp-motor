@@ -19,7 +19,7 @@ use bytes::{Bytes, BytesMut};
 use tokio::net::UdpSocket;
 use wp_connector_api::{DataSource, EventPreHook, SourceBatch, SourceEvent, Tags};
 use wp_connector_api::{SourceError, SourceReason, SourceResult};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 use super::normalize;
 

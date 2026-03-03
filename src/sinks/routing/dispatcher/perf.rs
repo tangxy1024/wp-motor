@@ -18,7 +18,7 @@ use wp_connector_api::ParamMap;
 use wp_data_model::cache::FieldQueryCache;
 use wp_model_core::model::fmt_def::TextFmt;
 use wp_model_core::model::{DataField, DataRecord, Value};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 use wp_parser::Parser;
 use wpl::{WplEvaluator, wpl_express};
 

@@ -7,7 +7,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use wp_connector_api::{SourceBatch, SourceEvent, SourceReason, SourceResult, Tags};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 const DEFAULT_BATCH_CAPACITY: usize = 128;
 const MAX_BATCH_BYTES: usize = 64 * 1024; // soft cap; single payload may exceed but only single event allowed

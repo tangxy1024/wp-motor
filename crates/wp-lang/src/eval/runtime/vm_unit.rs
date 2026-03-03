@@ -7,12 +7,13 @@ use crate::eval::runtime::field::FieldEvalUnit;
 use crate::eval::runtime::field_pipe::PipeEnum;
 use crate::eval::runtime::group::WplEvalGroup;
 use std::borrow::Cow;
-use wp_parse_api::{PipeHold, RawData, WparseError, WparseReason};
+use wp_model_core::raw::RawData;
+use wp_parse_api::{PipeHold, WparseError, WparseReason};
 
 use crate::parser::error::{WplCodeError, WplCodeReason};
 use crate::parser::wpl_rule::wpl_rule;
 use anyhow::Result;
-use orion_error::{ErrorWith, ToStructError, UvsDataFrom};
+use orion_error::{ErrorWith, ToStructError, UvsFrom};
 use orion_overload::new::New3;
 use wp_log::debug_edata;
 use wp_model_core::model::DataRecord;
@@ -115,8 +116,9 @@ impl WplEvaluator {
                 let cur_pos = input.len();
                 let pos = ori_len - cur_pos;
                 if pos >= oth_suc_len {
-                    Err(WparseReason::from_data(input.to_string(), Some(pos))
+                    Err(WparseReason::from_data()
                         .to_err()
+                        .with_detail(format!("{input} @ {pos}"))
                         .with_detail(e.to_string()))
                 } else {
                     Err(WparseError::from(WparseReason::NotMatch))
@@ -128,8 +130,9 @@ impl WplEvaluator {
         let mut cur_code = code;
         let rule = wpl_rule.parse_next(&mut cur_code).map_err(
             |err| {
-                WplCodeReason::from_data(cur_code.to_string(), None)
+                WplCodeReason::from_data()
                     .to_err()
+                    .with_detail(cur_code.to_string())
                     .with_detail(err.to_string())
             }, //ParseCodeError::new(err.to_string())
         )?;
@@ -239,7 +242,6 @@ impl WplEvaluator {
                 }
             }
         }
-        // Convert Vec<DataField> to Vec<FieldStorage>
         let storage_items: Vec<_> = result
             .into_iter()
             .map(wp_model_core::model::FieldStorage::from_owned)
@@ -291,7 +293,8 @@ mod tests {
     use orion_error::TestAssert;
     use orion_overload::new::New1;
     use smol_str::SmolStr;
-    use wp_parse_api::{PipeProcessor, RawData};
+    use wp_model_core::raw::RawData;
+    use wp_parse_api::PipeProcessor;
 
     #[test]
     fn log_test_ty() -> AnyResult<()> {

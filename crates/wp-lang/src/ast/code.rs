@@ -9,7 +9,7 @@ use crate::parser::wpl_pkg::wpl_package;
 use crate::parser::wpl_rule::wpl_rule;
 use crate::winnow::Parser;
 use derive_getters::Getters;
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsNotFoundFrom};
+use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
 use wp_parser::comment::CommentParser;
 
 #[derive(Debug, Clone, Getters)]
@@ -97,6 +97,8 @@ impl WplCode {
         if let Some(rule_file) = arg_file {
             return WplCode::load(rule_file);
         }
-        WplCodeReason::from_not_found("miss wpl file").err_result()
+        Err(WplCodeReason::from_not_found()
+            .to_err()
+            .with_detail("miss wpl file"))
     }
 }

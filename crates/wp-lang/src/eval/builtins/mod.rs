@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 use std::sync::{Arc, Once};
 
-use wp_parse_api::{PipeHold, RawData};
+use wp_model_core::raw::RawData;
+use wp_parse_api::PipeHold;
 
 pub mod base64;
 pub mod bom;

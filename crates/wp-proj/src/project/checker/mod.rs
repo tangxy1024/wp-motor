@@ -10,7 +10,7 @@ use std::path::PathBuf;
 
 use super::warp::WarpProject;
 use crate::types::CheckStatus;
-use orion_conf::UvsConfFrom;
+use orion_conf::UvsFrom;
 use orion_error::ToStructError;
 use orion_variate::EnvDict;
 use wp_cli_core::business::connectors::{sinks as sink_connectors, sources as source_connectors};
@@ -32,9 +32,7 @@ pub fn check_with(
     render_output(&rows, &stats, opts, comps);
 
     if has_failures(&rows, comps) {
-        return Err(
-            wp_error::run_error::RunReason::from_conf("some project checks failed").to_err(),
-        );
+        return Err(wp_error::run_error::RunReason::from_conf().to_err());
     }
     Ok(())
 }

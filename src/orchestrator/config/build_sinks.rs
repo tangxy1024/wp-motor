@@ -1,5 +1,6 @@
 use orion_error::ContextRecord;
 use orion_error::ErrorOwe;
+use orion_error::ErrorOweBase;
 use orion_error::OperationContext;
 use wp_error::DistFocus;
 

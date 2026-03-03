@@ -3,10 +3,8 @@ use orion_conf::{
     ToStructError,
     error::{ConfIOReason, OrionConfResult},
 };
-use orion_error::UvsValidationFrom;
+use orion_error::UvsFrom;
 use orion_variate::EnvEvaluable;
-use wp_conf_base::ConfParser;
-use wp_connector_api::Tags;
 use wp_model_core::model::fmt_def::TextFmt;
 
 use crate::types::AnyResult;
@@ -293,22 +291,29 @@ impl FlexGroup {
 impl crate::structure::Validate for FlexGroup {
     fn validate(&self) -> OrionConfResult<()> {
         if self.name.trim().is_empty() {
-            return ConfIOReason::from_validation("group.name must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.name must not be empty"));
         }
         if self.parallel > 10 {
-            return ConfIOReason::from_validation("group.parallel must be <= 10").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.parallel must be <= 10"));
         }
-        // tags 校验：统一使用 wp_model_core::tags::validate_tags
-        if let Err(e) = Tags::validate(&self.tags) {
-            return ConfIOReason::from_validation(e).err_result();
+        if let Err(e) = crate::utils::validate_tags(&self.tags) {
+            return Err(ConfIOReason::from_validation().to_err().with_detail(e));
         }
         if let Some(g) = &self.expect
             && let Err(e) = g.validate()
         {
-            return ConfIOReason::from_validation(e.to_string()).err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(e.to_string()));
         }
         if self.sinks.is_empty() {
-            return ConfIOReason::from_validation("group.sinks must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.sinks must not be empty"));
         }
         Ok(())
     }
@@ -317,18 +322,26 @@ impl crate::structure::Validate for FlexGroup {
 impl crate::structure::Validate for FixedGroup {
     fn validate(&self) -> OrionConfResult<()> {
         if self.name.trim().is_empty() {
-            return ConfIOReason::from_validation("group.name must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.name must not be empty"));
         }
         if self.parallel > 10 {
-            return ConfIOReason::from_validation("group.parallel must be <= 10").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.parallel must be <= 10"));
         }
         if let Some(g) = &self.expect
             && let Err(e) = g.validate()
         {
-            return ConfIOReason::from_validation(e.to_string()).err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(e.to_string()));
         }
         if self.sinks.is_empty() {
-            return ConfIOReason::from_validation("group.sinks must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.sinks must not be empty"));
         }
         Ok(())
     }
@@ -339,14 +352,16 @@ impl crate::structure::Validate for SinkGroupConf {
         match self {
             SinkGroupConf::Flexi(x) => {
                 if let Err(e) = x.validate() {
-                    return ConfIOReason::from_validation(format!("flexi group validate: {}", e))
-                        .err_result();
+                    return Err(ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!("flexi group validate: {}", e)));
                 }
             }
             SinkGroupConf::Fixed(x) => {
                 if let Err(e) = x.validate() {
-                    return ConfIOReason::from_validation(format!("fixed group validate: {}", e))
-                        .err_result();
+                    return Err(ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!("fixed group validate: {}", e)));
                 }
             }
         }

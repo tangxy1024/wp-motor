@@ -6,14 +6,13 @@ use crate::{cond::WarpConditionParser, structure::Validate};
 use derive_getters::Getters;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{ErrorOwe, ErrorWith, ToStructError};
-use orion_error::{ContextRecord, OperationContext, UvsValidationFrom};
+use orion_error::{ContextRecord, OperationContext, UvsFrom};
 use orion_variate::EnvEvaluable;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 use winnow::stream::ToUsize;
-use wp_conf_base::ConfParser;
-use wp_connector_api::{ParamMap, Tags};
+use wp_connector_api::ParamMap;
 use wp_log::{debug_ctrl, info_ctrl};
 use wp_model_core::model::fmt_def::TextFmt;
 
@@ -222,7 +221,9 @@ impl Validate for SinkInstanceConf {
         opx.record("name", self.full_name().as_str());
         opx.record("kind", self.core().kind.as_str());
         if self.core.name.trim().is_empty() {
-            return ConfIOReason::from_validation("sink.name must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("sink.name must not be empty"));
         }
         let kind = self.resolved_kind_str();
         let p = &self.core.params;
@@ -238,10 +239,9 @@ impl Validate for SinkInstanceConf {
                         .map(|s| !s.trim().is_empty())
                         .unwrap_or(false);
                 if !(has_base_file) {
-                    return ConfIOReason::from_validation(
-                        "file sink requires 'path' or 'base'+'file'",
-                    )
-                    .err_result();
+                    return Err(ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail("file sink requires 'path' or 'base'+'file'"));
                 }
             }
             _ => {}
@@ -258,15 +258,16 @@ impl Validate for SinkInstanceConf {
                         .with(path.as_str())?;
                 }
             } else {
-                return ConfIOReason::from_validation("filter file not found")
-                    .err_result()
-                    .with(path.as_str());
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail("filter file not found")
+                    .with(path.as_str()));
             }
         }
         if let Some(exp) = &self.expect {
             exp.validate().owe_conf().want("sink.expect validate")?;
         }
-        Tags::validate(&self.core.tags)
+        crate::utils::validate_tags(&self.core.tags)
             .owe_conf()
             .want("tags validate")?;
 

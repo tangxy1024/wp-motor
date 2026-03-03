@@ -1,7 +1,7 @@
 use super::super::prelude::*;
 use oml::parser::code::OMLCode;
 use orion_conf::EnvTomlLoad;
-use orion_error::{ContextRecord, WithContext};
+use orion_error::{ContextRecord, ErrorOweBase, WithContext};
 use orion_variate::EnvDict;
 use std::{
     collections::{HashMap, VecDeque},

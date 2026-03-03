@@ -7,7 +7,7 @@ use crate::sinks::{SinkEndpoint, SinkRecUnit};
 use crate::types::{AnyResult, Build1, SafeH};
 use anyhow::Context;
 use async_trait::async_trait;
-use orion_error::ErrorOwe;
+use orion_error::ErrorOweBase;
 use std::fs;
 use std::fs::File;
 use std::io::{Cursor, ErrorKind, Write};

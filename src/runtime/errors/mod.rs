@@ -59,23 +59,23 @@ pub fn err4_dispatch_data(err: &SourceError, mode: &RobustnessMode) -> ErrorHand
 
 fn universal_proc_stg(mode: &RobustnessMode, e: &UvsReason) -> ErrorHandlingStrategy {
     match e {
-        UvsReason::LogicError(e) => match mode {
+        UvsReason::LogicError => match mode {
             RobustnessMode::Strict => {
-                error_data!("logic error: {}", e);
+                error_data!("logic error");
                 ErrorHandlingStrategy::Tolerant
             }
             _ => {
-                error_data!("logic error: {}", e);
+                error_data!("logic error");
                 ErrorHandlingStrategy::Throw
             }
         },
-        UvsReason::DataError(_, _) => ErrorHandlingStrategy::Tolerant,
-        UvsReason::SystemError(e) => {
-            warn_data!("data error: {}", e);
+        UvsReason::DataError => ErrorHandlingStrategy::Tolerant,
+        UvsReason::SystemError => {
+            warn_data!("system error");
             ErrorHandlingStrategy::Tolerant
         }
-        UvsReason::BusinessError(e) => {
-            warn_data!("biz error: {}", e);
+        UvsReason::BusinessError => {
+            warn_data!("biz error");
             ErrorHandlingStrategy::Tolerant
         }
         UvsReason::ConfigError(e) => {

@@ -219,7 +219,7 @@ mod tests {
     use wp_connector_api::{
         DataSource, SourceBatch, SourceError, SourceEvent, SourceReason, SourceResult, Tags,
     };
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     const TEST_CMD_BUFFER_CAP: usize = 4;
     const TEST_TASK_UNIT: usize = 16;

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use orion_conf::{ToStructError, UvsConfFrom};
+use orion_conf::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use wp_cli_core as wlib;
 use wp_engine::facade::config;
@@ -47,7 +47,7 @@ pub fn stat_sink_files(filters: &SinkStatFilters<'_>, dict: &EnvDict) -> RunResu
     let sink_root = Path::new(&cm.work_root_path()).join(main.sink_root());
     ensure_sink_dirs(&sink_root, main.sink_root())?;
     let (rows, total) = wp_cli_core::collect_sink_statistics(&sink_root, &ctx, dict)
-        .map_err(|e| RunReason::from_conf(e.to_string()).to_err())?;
+        .map_err(|e| RunReason::from_conf().to_err())?;
     Ok(SinkStatResult { rows, total })
 }
 
@@ -69,7 +69,7 @@ pub fn stat_file_combined(
     // Collect sink statistics
     let sink_root = Path::new(&cm.work_root_path()).join(main.sink_root());
     let (rows, total) = wp_cli_core::collect_sink_statistics(&sink_root, &ctx, dict)
-        .map_err(|e| RunReason::from_conf(e.to_string()).to_err())?;
+        .map_err(|e| RunReason::from_conf().to_err())?;
 
     Ok(CombinedStatResult {
         src,
@@ -91,11 +91,7 @@ pub(crate) fn ensure_sink_dirs(sink_root: &Path, sink_root_conf: &str) -> RunRes
     if has_v2_dirs(sink_root) {
         Ok(())
     } else {
-        Err(RunReason::from_conf(format!(
-            "缺少 sinks 配置目录：在 '{}' 下未发现 business.d/ 或 infra.d/",
-            sink_root_conf
-        ))
-        .to_err())
+        Err(RunReason::from_conf().to_err())
     }
 }
 

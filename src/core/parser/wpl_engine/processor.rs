@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use wp_connector_api::SourceEvent;
 use wp_model_core::model::{DataField, DataRecord};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 use wpl::WparseError;
 
 impl WplEngine {
@@ -137,7 +137,7 @@ mod tests {
     use crate::sinks::{InfraSinkAgent, SinkGroupAgent};
     use std::sync::Arc;
     use wp_connector_api::{SourceEvent, Tags};
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
     use wpl::{WplEvaluator, gen_pkg_id};
 
     fn build_event(payload: &str) -> SourceEvent {

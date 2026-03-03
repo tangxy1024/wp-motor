@@ -2,7 +2,7 @@
 //!
 //! 提供统一的文件和目录操作接口，统一错误处理。
 
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_error::{ToStructError, UvsFrom};
 use std::fs;
 use std::path::{Path, PathBuf};
 use wp_error::run_error::{RunReason, RunResult};
@@ -133,8 +133,7 @@ impl FsOps {
         }
 
         let search_pattern = format!("{}/{}", dir.display(), pattern);
-        let entries = glob::glob(&search_pattern)
-            .map_err(|e| RunReason::from_conf(format!("Glob 模式错误: {}", e)).to_err())?;
+        let entries = glob::glob(&search_pattern).map_err(|e| RunReason::from_conf().to_err())?;
 
         let mut files: Vec<PathBuf> = entries.filter_map(Result::ok).collect();
 

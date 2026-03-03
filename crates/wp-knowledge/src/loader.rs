@@ -7,7 +7,7 @@ use serde::Deserialize;
 use wp_log::info_ctrl;
 
 use crate::mem::memdb::MemDB;
-use orion_error::{ContextRecord, ErrorOwe, OperationContext, ToStructError, UvsConfFrom};
+use orion_error::{ContextRecord, ErrorOwe, OperationContext, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use rusqlite::OpenFlags;
 use wp_error::{KnowledgeReason, KnowledgeResult};
@@ -184,7 +184,9 @@ fn parse_knowdb_conf(
     let conf: KnowDbConf =
         <KnowDbConf as EnvTomlLoad<KnowDbConf>>::env_parse_toml(&conf_txt, dict).owe_conf()?;
     if conf.version != 2 {
-        return KnowledgeReason::from_conf("unsupported knowdb.version").err_result();
+        return Err(KnowledgeReason::from_conf()
+            .to_err()
+            .with_detail("unsupported knowdb.version"));
     }
     let conf_dir = conf_abs.parent().unwrap_or_else(|| Path::new("."));
     let base_dir = join_rel(conf_dir, &conf.base_dir);
@@ -256,7 +258,9 @@ fn load_one_table(
         None => table_dir.join("data.csv"),
     };
     if !data_path.exists() {
-        return KnowledgeReason::from_conf("data.csv not found").err_result();
+        return Err(KnowledgeReason::from_conf()
+            .to_err()
+            .with_detail("data.csv not found"));
     }
     opx.record("data_path", &data_path);
 
@@ -270,7 +274,9 @@ fn load_one_table(
     } else if !t.columns.by_index.is_empty() {
         t.columns.by_index.clone()
     } else {
-        return KnowledgeReason::from_conf("columns mapping required").err_result();
+        return Err(KnowledgeReason::from_conf()
+            .to_err()
+            .with_detail("columns mapping required"));
     };
 
     // 导入（分批事务）
@@ -324,7 +330,9 @@ fn load_one_table(
     if let Some(min) = t.expected_rows.min
         && inserted < min
     {
-        return KnowledgeReason::from_conf("table data less").err_result();
+        return Err(KnowledgeReason::from_conf()
+            .to_err()
+            .with_detail("table data less"));
     }
     if let Some(max) = t.expected_rows.max
         && inserted > max
@@ -348,7 +356,9 @@ fn build_csv_reader(
     data_path: &Path,
 ) -> KnowledgeResult<csv::Reader<std::fs::File>> {
     if csvd.encoding.to_lowercase() != "utf-8" {
-        return KnowledgeReason::from_conf("only utf-8 csv is supported").err_result();
+        return Err(KnowledgeReason::from_conf()
+            .to_err()
+            .with_detail("only utf-8 csv is supported"));
     }
     let mut rdr_b = csv::ReaderBuilder::new();
     rdr_b.has_headers(csvd.has_header);
@@ -367,10 +377,11 @@ fn select_indices_by_header(
 ) -> KnowledgeResult<Vec<usize>> {
     let mut out = Vec::with_capacity(wanted.len());
     for name in wanted {
-        let pos = headers
-            .iter()
-            .position(|h| h == name)
-            .ok_or_else(|| KnowledgeReason::from_conf("header not found").to_err())?;
+        let pos = headers.iter().position(|h| h == name).ok_or_else(|| {
+            KnowledgeReason::from_conf()
+                .to_err()
+                .with_detail("header not found")
+        })?;
         out.push(pos);
     }
     Ok(out)

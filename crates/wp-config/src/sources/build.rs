@@ -5,7 +5,7 @@ use crate::sources::types::SourceConnector;
 use crate::structure::{SourceInstanceConf, Validate};
 use orion_conf::EnvTomlLoad;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsValidationFrom};
+use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
 use orion_variate::{EnvDict, EnvEvaluable};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -48,17 +48,21 @@ fn merge_source_params(
     let mut out = base.clone();
     for (k, v) in override_tbl.iter() {
         if is_nested_field_blacklisted(k) {
-            return ConfIOReason::from_validation(format!(
-                "invalid nested table '{}' in params override; please flatten and set keys [{}] directly under 'params'/'params_override'",
-                k,
-                allow.join(", ")
-            ))
-            .err_result();
+            return Err(
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "invalid nested table '{}' in params override; please flatten and set keys [{}] directly under 'params'/'params_override'",
+                        k,
+                        allow.join(", ")
+                    )),
+            );
         }
         if !allow.iter().any(|x| x == k) {
-            return ConfIOReason::from_validation("override not allowed")
-                .err_result()
-                .with(allow.join(","));
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("override not allowed")
+                .with(allow.join(",")));
         }
         out.insert(k.clone(), v.clone());
     }
@@ -109,11 +113,12 @@ pub fn build_source_instances(
             continue;
         }
         let conn = cnn_dict.get(&s.connect).ok_or_else(|| {
-            ConfIOReason::from_validation(format!(
-                "connector not found: '{}' (looked up under connectors/source.d)",
-                s.connect
-            ))
-            .to_err()
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!(
+                    "connector not found: '{}' (looked up under connectors/source.d)",
+                    s.connect
+                ))
         })?;
         let merged = merge_source_params(&conn.default_params, &s.params, &conn.allow_override)?;
         let mut inst = SourceInstanceConf::new_type(s.key, conn.kind.clone(), merged, s.tags);
@@ -141,10 +146,12 @@ pub fn validate_specs_with_factory(
                 item.connector_id.clone().unwrap_or_default(),
             );
             factory.validate_spec(&resolved).map_err(|e| {
-                ConfIOReason::from_validation(format!(
-                    "plugin validate failed for source '{}' of kind '{}': {}",
-                    core.name, core.kind, e
-                ))
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "plugin validate failed for source '{}' of kind '{}': {}",
+                        core.name, core.kind, e
+                    ))
             })?;
         }
     }
@@ -200,7 +207,7 @@ mod tests {
     use super::*;
     use crate::sources::{io, types};
     use crate::test_support::ForTest;
-    use orion_conf::UvsConfFrom;
+    use orion_conf::UvsFrom;
     use orion_variate::EnvDict;
     use serde_json::json;
     use std::fs;
@@ -342,7 +349,7 @@ type = "dummy"
         fn validate_spec(&self, spec: &wp_connector_api::SourceSpec) -> SourceResult<()> {
             // require key 'a' in params
             if !spec.params.contains_key("a") {
-                return Err(SourceReason::from_conf("missing required param 'a'").to_err());
+                return Err(SourceReason::from_conf().to_err());
             }
             Ok(())
         }
@@ -351,7 +358,7 @@ type = "dummy"
             _spec: &wp_connector_api::SourceSpec,
             _ctx: &wp_connector_api::SourceBuildCtx,
         ) -> SourceResult<SourceSvcIns> {
-            Err(SourceReason::from_conf("not used in validate test").to_err())
+            Err(SourceReason::from_conf().to_err())
         }
     }
 

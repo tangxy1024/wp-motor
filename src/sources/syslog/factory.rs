@@ -7,7 +7,7 @@ use super::config::{Protocol, SyslogSourceSpec};
 use super::tcp_source::TcpSyslogSource;
 use super::udp_source::UdpSyslogSource;
 use crate::sources::tcp::{FramingMode, TcpAcceptor, TcpSource};
-use orion_conf::UvsConfFrom;
+use orion_conf::UvsFrom;
 use orion_error::ToStructError;
 use serde_json::json;
 use std::collections::HashSet;
@@ -131,7 +131,7 @@ impl SourceFactory for SyslogSourceFactory {
         };
 
         fut.await
-            .map_err(|e: anyhow::Error| SourceReason::from_conf(e.to_string()).to_err())
+            .map_err(|e: anyhow::Error| SourceReason::from_conf().to_err())
     }
 }
 

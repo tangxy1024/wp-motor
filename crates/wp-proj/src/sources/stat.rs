@@ -1,4 +1,4 @@
-use orion_conf::{ToStructError, UvsConfFrom};
+use orion_conf::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::Path;
 use wp_cli_core::Ctx;
@@ -23,9 +23,8 @@ pub struct SourceStatResult {
 ///
 pub fn stat_file_sources(work_root: &str, dict: &EnvDict) -> RunResult<SourceStatResult> {
     // Load engine configuration to get source settings
-    let (cm, main) = config::load_warp_engine_confs(work_root, dict).map_err(|e| {
-        RunReason::from_conf(format!("Failed to load engine config: {}", e)).to_err()
-    })?;
+    let (cm, main) = config::load_warp_engine_confs(work_root, dict)
+        .map_err(|e| RunReason::from_conf().to_err())?;
 
     // Resolve the actual work root path
     let resolved = cm.work_root_path();

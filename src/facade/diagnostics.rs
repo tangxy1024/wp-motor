@@ -203,7 +203,7 @@ mod tests {
         use wp_error::run_error::{DistFocus, SourceFocus};
         assert_eq!(exit_code_for(&RunReason::Dist(DistFocus::StgCtrl)), 1);
         assert_eq!(exit_code_for(&RunReason::Source(SourceFocus::NoData)), 2);
-        let uv = UvsReason::core_conf("bad conf");
+        let uv = UvsReason::core_conf();
         assert_eq!(exit_code_for(&RunReason::Uvs(uv)), 300);
     }
 }

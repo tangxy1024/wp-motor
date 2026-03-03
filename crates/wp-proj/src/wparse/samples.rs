@@ -1,6 +1,6 @@
 use crate::res::simple_ins_run_res;
 use glob::glob;
-use orion_error::{ErrorOwe, ToStructError, UvsConfFrom};
+use orion_error::{ErrorOwe, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,7 +11,7 @@ use wp_error::run_error::{RunReason, RunResult};
 pub fn parse_wpl_samples(work_root: &str, dict: &EnvDict) -> RunResult<()> {
     let jobs = discover_sample_jobs(work_root, dict)?;
     if jobs.is_empty() {
-        return Err(RunReason::from_conf("未在 wpl 目录中找到 sample.dat").to_err());
+        return Err(RunReason::from_conf().to_err());
     }
 
     let mut results: u32 = 0;
@@ -40,8 +40,8 @@ fn parse_single_run<P: AsRef<Path> + Clone>(data_path: P, rule_file: P) -> RunRe
 }
 
 fn discover_sample_jobs(work_root: &str, dict: &EnvDict) -> RunResult<Vec<SampleJob>> {
-    let (cm, main) = load_warp_engine_confs(work_root, dict)
-        .map_err(|e| RunReason::from_conf(format!("加载 wparse.toml 失败: {}", e)).to_err())?;
+    let (cm, main) =
+        load_warp_engine_confs(work_root, dict).map_err(|e| RunReason::from_conf().to_err())?;
     let rule_root = Path::new(main.rule_root());
     let wpl_root = if rule_root.is_absolute() {
         rule_root.to_path_buf()
@@ -53,8 +53,7 @@ fn discover_sample_jobs(work_root: &str, dict: &EnvDict) -> RunResult<Vec<Sample
     }
     let pattern = format!("{}/**/sample.dat", wpl_root.display());
     let mut jobs = Vec::new();
-    let walker = glob(&pattern)
-        .map_err(|e| RunReason::from_conf(format!("扫描样本失败: {}", e)).to_err())?;
+    let walker = glob(&pattern).map_err(|e| RunReason::from_conf().to_err())?;
     for entry in walker {
         match entry {
             Ok(sample_path) => {
@@ -92,12 +91,8 @@ fn locate_rule_file(dir: &Path) -> RunResult<Option<PathBuf>> {
         return Ok(Some(preferred));
     }
     let mut first = None;
-    for entry in fs::read_dir(dir).map_err(|e| {
-        RunReason::from_conf(format!("列举目录失败 {}: {}", dir.display(), e)).to_err()
-    })? {
-        let entry = entry.map_err(|e| {
-            RunReason::from_conf(format!("读取目录项失败 {}: {}", dir.display(), e)).to_err()
-        })?;
+    for entry in fs::read_dir(dir).map_err(|e| RunReason::from_conf().to_err())? {
+        let entry = entry.map_err(|e| RunReason::from_conf().to_err())?;
         let path = entry.path();
         if path
             .extension()

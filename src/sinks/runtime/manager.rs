@@ -25,7 +25,7 @@ use crate::stat::metric_collect::MetricCollectors;
 use wp_conf::structure::SinkInstanceConf;
 use wp_connector_api::{SinkReason, SinkResult};
 use wp_error::error_handling::{ErrorHandlingStrategy, sys_robust_mode};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 use crate::types::AnyResult;
 use orion_error::{ErrorOwe, ErrorWith};

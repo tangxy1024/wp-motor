@@ -20,24 +20,19 @@ use wp_stat::{StatRecorder, StatStage};
 fn load_samples(rule_root: &str, find_name: &str) -> RunResult<Vec<String>> {
     use std::io::BufRead;
     // discover files
-    let files = wp_conf::utils::find_conf_files(rule_root, find_name).map_err(|e| {
-        RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf(
-            e.to_string(),
-        )))
-    })?;
+    let files = wp_conf::utils::find_conf_files(rule_root, find_name)
+        .map_err(|e| RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf())))?;
     info_ctrl!("run_sample_direct: found {} files", files.len());
     if files.is_empty() {
         return Err(RunError::from(wp_error::run_error::RunReason::Uvs(
-            UvsReason::core_conf(format!("no {} file in {}", find_name, rule_root)),
+            UvsReason::core_conf(),
         )));
     }
     // load lines
     let mut out = Vec::new();
     for f in files {
         let file = std::fs::File::open(&f).map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf(
-                e.to_string(),
-            )))
+            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
         })?;
         let reader = std::io::BufReader::new(file);
         for s in reader.lines().map_while(Result::ok) {
@@ -334,9 +329,7 @@ pub async fn run_sample_direct(
     let mut total_produced: usize = 0;
     for t in tasks {
         let produced = t.await.map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf(
-                e.to_string(),
-            )))
+            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
         })??;
         total_produced += produced;
     }

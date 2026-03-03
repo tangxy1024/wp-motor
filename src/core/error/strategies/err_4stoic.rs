@@ -19,10 +19,10 @@ impl Err4Stoic {
         match reason {
             //UniversalReason::LogicError(_) => { }
             //UniversalReason::BizError(_) => {}
-            UvsReason::DataError(_, _) => ErrStrategy::Ignore,
+            UvsReason::DataError => ErrStrategy::Ignore,
             //UniversalReason::SysError(_) => { }
             //UniversalReason::ConfError(_) => {}
-            UvsReason::RunRuleError(_) => ErrStrategy::Ignore,
+            UvsReason::RunRuleError => ErrStrategy::Ignore,
             _ => ErrStrategy::Throw,
         }
     }

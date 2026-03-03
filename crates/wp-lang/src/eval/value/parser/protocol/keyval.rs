@@ -114,7 +114,7 @@ fn value_take(
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     use crate::ast::WplField;
     use crate::eval::runtime::vm_unit::WplEvaluator;

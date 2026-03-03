@@ -29,7 +29,7 @@
 ///! # fn some_anyhow_function() -> anyhow::Result<()> { Ok(()) }
 ///! # fn some_config_function() -> Result<(), orion_error::StructError<orion_conf::error::ConfIOReason>> { Ok(()) }
 ///! ```
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_error::{ToStructError, UvsFrom};
 use wp_error::run_error::{RunReason, RunResult};
 
 /// Result 扩展 trait，提供统一的错误转换接口
@@ -72,7 +72,7 @@ pub trait ResultExt<T, E> {
 /// 为所有 Result<T, E> 实现 ResultExt，其中 E 实现了 Display
 impl<T, E: std::fmt::Display> ResultExt<T, E> for Result<T, E> {
     fn to_run_err(self, context: &str) -> RunResult<T> {
-        self.map_err(|e| RunReason::from_conf(format!("{}: {}", context, e)).to_err())
+        self.map_err(|e| RunReason::from_conf().to_err())
     }
 
     fn to_run_err_with<F>(self, f: F) -> RunResult<T>
@@ -81,7 +81,7 @@ impl<T, E: std::fmt::Display> ResultExt<T, E> for Result<T, E> {
     {
         self.map_err(|e| {
             let msg = f(&e);
-            RunReason::from_conf(msg).to_err()
+            RunReason::from_conf().to_err()
         })
     }
 }

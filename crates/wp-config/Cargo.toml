@@ -12,7 +12,7 @@ name = "wp_config"
 
 [dependencies]
 winnow = { workspace = true }
-orion-error = { workspace = true }
+orion-error =   { workspace = true }
 orion_conf = { workspace = true }
 orion-variate =  {workspace = true }
 derive_more = { workspace = true }

@@ -36,7 +36,7 @@
 //! use wp_error::run_error::RunReason;
 //!
 //! let content = fs::read_to_string(&path).map_err(|e| {
-//!     RunReason::from_conf(format!("Failed to read file {:?}: {}", path, e)).to_err()
+//!     RunReason::from_conf().to_err()
 //! })?;
 //! ```
 //!
@@ -88,7 +88,7 @@
 //! # let _ = demo();
 //! ```
 
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_error::{ToStructError, UvsFrom};
 use std::path::Path;
 use wp_error::run_error::{RunReason, RunResult};
 
@@ -101,7 +101,7 @@ pub struct ErrorHandler;
 impl ErrorHandler {
     /// 创建配置相关错误
     pub fn config_error(message: impl Into<String>) -> RunResult<()> {
-        Err(RunReason::from_conf(message.into()).to_err())
+        Err(RunReason::from_conf().to_err())
     }
 
     /// 创建文件操作相关错误
@@ -144,10 +144,7 @@ impl ErrorHandler {
         path: &Path,
         op: impl FnOnce() -> Result<T, std::io::Error>,
     ) -> RunResult<T> {
-        op().map_err(|e| {
-            RunReason::from_conf(format!("Failed to {}: {:?}, error: {}", operation, path, e))
-                .to_err()
-        })
+        op().map_err(|e| RunReason::from_conf().to_err())
     }
 
     /// 安全创建目录
@@ -178,7 +175,7 @@ impl ErrorHandler {
         result: Result<T, Box<dyn std::error::Error>>,
         context: &str,
     ) -> RunResult<T> {
-        result.map_err(|e| RunReason::from_conf(format!("{}: {}", context, e)).to_err())
+        result.map_err(|e| RunReason::from_conf().to_err())
     }
 
     /// 转换和包装错误 (支持 &str context)
@@ -186,7 +183,7 @@ impl ErrorHandler {
         result: Result<T, Box<dyn std::error::Error>>,
         context: &str,
     ) -> RunResult<T> {
-        result.map_err(|e| RunReason::from_conf(format!("{}: {}", context, e)).to_err())
+        result.map_err(|e| RunReason::from_conf().to_err())
     }
 
     /// 创建验证错误

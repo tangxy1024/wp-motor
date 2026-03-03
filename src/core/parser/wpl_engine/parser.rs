@@ -4,7 +4,7 @@ use super::types::ProcessResult;
 use crate::core::parser::wpl_engine::pipeline::WplPipeline;
 use crate::{core::parser::ParseOption, stat::MonSend};
 use orion_conf::ToStructError;
-use orion_error::{UvsDataFrom, UvsReason};
+use orion_error::{UvsFrom, UvsReason};
 use std::sync::Arc;
 use wp_connector_api::SourceEvent;
 use wp_model_core::model::data::Field;
@@ -63,10 +63,7 @@ impl MultiParser {
                             if parsed_len > max_depth {
                                 max_depth = parsed_len;
                                 best_wpl = wpl_line.wpl_key().clone();
-                                best_error = Some(
-                                    WparseReason::from_data("not complete", Some(parsed_len))
-                                        .to_err(),
-                                );
+                                best_error = Some(WparseReason::from_data().to_err());
                             }
                         } else {
                             let record = Arc::new(tdo_crate);
@@ -80,14 +77,11 @@ impl MultiParser {
                 }
                 Err(e) => {
                     // 记录解析深度最高的错误
-                    if let WparseReason::Uvs(UvsReason::DataError(_, Some(pos))) = e.reason() {
-                        if *pos > max_depth {
-                            max_depth = *pos;
-                            best_wpl = wpl_line.wpl_key().clone();
-                            best_error = Some(e.clone());
-                            //single wpl fail!
-                            debug_edata!(event.event_id, "wpl parse fail: {}", wpl_line.wpl_key(),);
-                        }
+                    if matches!(e.reason(), WparseReason::Uvs(UvsReason::DataError)) {
+                        best_wpl = wpl_line.wpl_key().clone();
+                        best_error = Some(e.clone());
+                        //single wpl fail!
+                        debug_edata!(event.event_id, "wpl parse fail: {}", wpl_line.wpl_key(),);
                     } else if best_error.is_none() {
                         // 如果不是 DataError，作为备选记录第一个错误
                         best_wpl = wpl_line.wpl_key().clone();
@@ -103,11 +97,8 @@ impl MultiParser {
         }
 
         // 所有规则都失败，返回深度最高的失败信息
-        let best_error = best_error.unwrap_or_else(|| {
-            WparseError::from(WparseReason::Uvs(UvsReason::SystemError(
-                "No matching rule".to_string(),
-            )))
-        });
+        let best_error = best_error
+            .unwrap_or_else(|| WparseError::from(WparseReason::Uvs(UvsReason::system_error())));
         ProcessResult::Miss(super::types::ParseFailInfo::new(
             best_wpl, best_error, max_depth,
         ))

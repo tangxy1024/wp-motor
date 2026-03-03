@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -5,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{ToStructError, TomlIO};
-use orion_error::{ErrorOwe, ErrorWith, UvsValidationFrom};
+use orion_error::{ErrorOwe, ErrorOweBase, ErrorWith, UvsFrom};
 use orion_variate::EnvEvaluable;
 use serde::Serialize;
 use wp_connector_api::ParamMap;
@@ -20,7 +21,9 @@ pub fn ignore_check(ignore: bool, msg: &str) -> OrionConfResult<()> {
     if ignore {
         info_ctrl!("ignore! : {}", msg);
     } else {
-        return ConfIOReason::from_validation(msg).err_result();
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(msg.to_string()));
     }
     Ok(())
 }
@@ -112,6 +115,49 @@ where
 
 pub fn some_str(s: &str) -> Option<String> {
     Some(s.to_string())
+}
+
+pub fn validate_tags(items: &[String]) -> Result<(), String> {
+    if items.len() > 4 {
+        return Err(format!(
+            "tags must have at most 4 items (got {})",
+            items.len()
+        ));
+    }
+    for (idx, item) in items.iter().enumerate() {
+        let (k, v) = if let Some((k, v)) = item.split_once(':').or_else(|| item.split_once('=')) {
+            (k.trim(), v.trim())
+        } else {
+            (item.trim(), "true")
+        };
+        if k.is_empty() || k.len() > 32 || !k.chars().all(is_valid_tag_key_char) {
+            let mut msg = String::new();
+            let _ = write!(
+                &mut msg,
+                "invalid tag key at index {}: '{}' (allowed: [A-Za-z0-9_.-], len 1..=32)",
+                idx, k
+            );
+            return Err(msg);
+        }
+        if v.len() > 64 || !v.chars().all(is_valid_tag_val_char) {
+            let mut msg = String::new();
+            let _ = write!(
+                &mut msg,
+                "invalid tag value at index {}: '{}' (allowed: [A-Za-z0-9_.:/=@+,-], len 0..=64)",
+                idx, v
+            );
+            return Err(msg);
+        }
+    }
+    Ok(())
+}
+
+fn is_valid_tag_key_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-')
+}
+
+fn is_valid_tag_val_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | ':' | '/' | '=' | '@' | '+' | ',' | '-')
 }
 
 //pub type NomResult<I, O> = IResult<I, O, nom::error::VerboseError<I>>;

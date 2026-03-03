@@ -5,7 +5,7 @@ use crate::types::AnyResult;
 use futures_util::TryFutureExt;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{EnvTomlLoad, ErrorOwe, ToStructError, TomlIO};
-use orion_error::{ErrorWith, UvsResFrom};
+use orion_error::{ErrorWith, UvsFrom};
 use orion_variate::EnvDict;
 use std::cell::OnceCell;
 use std::path::{Path, PathBuf};

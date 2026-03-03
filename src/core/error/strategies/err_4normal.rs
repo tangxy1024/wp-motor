@@ -19,11 +19,11 @@ impl Err4Normal {
         match reason {
             //UniversalReason::LogicError(_) => { }
             //UniversalReason::BizError(_) => {}
-            UvsReason::DataError(_, _) => ErrStrategy::Ignore,
+            UvsReason::DataError => ErrStrategy::Ignore,
             //UniversalReason::SysError(_) => { }
             //UniversalReason::ResError(_) => ErrorStg::FixRetry,
             //UniversalReason::ConfError(_) => {}
-            UvsReason::RunRuleError(_) => ErrStrategy::Ignore,
+            UvsReason::RunRuleError => ErrStrategy::Ignore,
             _ => ErrStrategy::Throw,
         }
     }

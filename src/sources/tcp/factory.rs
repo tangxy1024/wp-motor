@@ -1,4 +1,4 @@
-use orion_conf::UvsConfFrom;
+use orion_conf::UvsFrom;
 use orion_error::ToStructError;
 use serde_json::json;
 use wp_conf::connectors::{ConnectorDef, ConnectorScope, ParamMap};
@@ -35,7 +35,7 @@ impl SourceFactory for TcpSourceFactory {
             TcpSourceSpec::from_params(&spec.params)?;
             Ok(())
         })();
-        res.map_err(|e| SourceReason::from_conf(e.to_string()).to_err())
+        res.map_err(|e| SourceReason::from_conf().to_err())
     }
 
     async fn build(
@@ -97,7 +97,7 @@ impl SourceFactory for TcpSourceFactory {
         };
 
         fut.await
-            .map_err(|e: anyhow::Error| SourceReason::from_conf(e.to_string()).to_err())
+            .map_err(|e: anyhow::Error| SourceReason::from_conf().to_err())
     }
 }
 
@@ -136,7 +136,7 @@ mod tests {
     use super::*;
     use tokio::net::TcpStream;
     use wp_connector_api::{SourceFactory, SourceSpec as ResolvedSourceSpec};
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     #[tokio::test]
     async fn factory_builds_with_ephemeral_port() {

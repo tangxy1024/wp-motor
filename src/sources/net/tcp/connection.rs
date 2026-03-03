@@ -13,7 +13,7 @@ use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio::sync::{Mutex, broadcast, mpsc};
 use tokio::task::JoinHandle;
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 use wp_connector_api::{SourceReason, SourceResult};
 

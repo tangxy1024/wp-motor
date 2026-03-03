@@ -1,7 +1,7 @@
 use super::defs::ConnectorTomlFile;
 use orion_conf::EnvTomlLoad;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsValidationFrom};
+use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::collections::BTreeMap;
 use std::fs;
@@ -34,12 +34,13 @@ pub fn load_connector_defs_from_dir(
         for mut def in file.connectors {
             let origin = Some(fp.display().to_string());
             if map.contains_key(&def.id) {
-                return ConfIOReason::from_validation(format!(
-                    "duplicate connector id '{}' (file {})",
-                    def.id,
-                    fp.display()
-                ))
-                .err_result();
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "duplicate connector id '{}' (file {})",
+                        def.id,
+                        fp.display()
+                    )));
             }
             def.scope = scope;
             def.origin = origin;

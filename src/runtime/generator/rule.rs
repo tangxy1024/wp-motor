@@ -33,9 +33,7 @@ async fn send_unit_rules(
     let mut sent = 0usize;
     for _ in 0..unit_cnt {
         let ffv = src.gen_one(*cur_idx).map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf(
-                e.to_string(),
-            )))
+            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
         })?;
         *cur_idx = (*cur_idx + 1) % rules_len;
         // 将 FmtFieldVec 转换为字符串并调用 sink_str
@@ -69,11 +67,8 @@ pub async fn run_rule_direct(
         .owe_rule()
         .want("load rule")?;
     info_ctrl!("run_rule_direct: loaded {} rule units", units.len());
-    let source = RuleGenSource::from_units(units).map_err(|e| {
-        RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf(
-            e.to_string(),
-        )))
-    })?;
+    let source = RuleGenSource::from_units(units)
+        .map_err(|e| RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf())))?;
     let source = std::sync::Arc::new(source);
     let parallel = std::cmp::max(1, gar.parallel);
     let batch = default_batch();
@@ -136,9 +131,7 @@ pub async fn run_rule_direct(
     let mut total_produced: usize = 0;
     for t in tasks {
         let n = t.await.map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf(
-                e.to_string(),
-            )))
+            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
         })??;
         total_produced += n;
     }

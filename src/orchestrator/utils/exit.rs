@@ -27,7 +27,7 @@ mod tests {
             code_for_run_reason(&RunReason::Source(SourceFocus::NoData)),
             2
         );
-        let uv = UvsReason::core_conf("bad conf");
+        let uv = UvsReason::core_conf();
         assert_eq!(code_for_run_reason(&RunReason::Uvs(uv)), 300);
     }
 }

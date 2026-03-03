@@ -1,7 +1,7 @@
 use comfy_table::{Cell as TCell, Table};
 use oml::core::ConfADMExt;
 use oml::language::ObjModel;
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use serde_json::json;
 use wildmatch::WildMatch;
@@ -191,15 +191,14 @@ pub fn collect_oml_models(work_root: &str, dict: &EnvDict) -> RunResult<Vec<OmlR
     let oml_root = ConfigPathResolver::resolve_model_path(work_root, "oml", dict)?;
     let root_str = oml_root
         .to_str()
-        .ok_or_else(|| RunReason::from_conf("invalid oml root path").to_err())?;
-    let files = find_conf_files(root_str, WPARSE_OML_FILE)
-        .map_err(|e| RunReason::from_conf(format!("list OML failed: {}", e)).to_err())?;
+        .ok_or_else(|| RunReason::from_conf().to_err())?;
+    let files =
+        find_conf_files(root_str, WPARSE_OML_FILE).map_err(|e| RunReason::from_conf().to_err())?;
     let mut items = Vec::new();
     for path in files {
         let path_str = path.to_string_lossy().to_string();
-        let model = ObjModel::load(path_str.as_str()).map_err(|e| {
-            RunReason::from_conf(format!("parse OML {} failed: {}", path_str, e)).to_err()
-        })?;
+        let model =
+            ObjModel::load(path_str.as_str()).map_err(|e| RunReason::from_conf().to_err())?;
         // Skip disabled models
         if !model.enable() {
             continue;

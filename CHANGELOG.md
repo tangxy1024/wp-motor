@@ -4,7 +4,41 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-## [1.17.3 Unreleased]
+## [1.18.0 Unreleased]
+
+### Changed
+- **Error Handling/Deps**: Complete workspace migration to `orion-error 0.6`/`orion_conf 0.5` API surface
+  - Replace legacy `Uvs*From` traits with `UvsFrom`
+  - Update `from_validation/from_conf/from_logic` call patterns and structured error detail attachment
+  - Align `UvsReason` matching with 0.6 enum shape and update `RawData` imports to new public path
+- **wp-proj/Runtime**: Refactor error conversion flow to `owe/want` style and align generators/loaders with unified error construction
+
+### Fixed
+- **Build**: Fix upgrade-induced compile breaks across `wp-config`, `wp-cli-core`, `wp-proj`, `wp-oml`, and `wp-engine` after dependency bump
+- **Tests**: Repair integration/runtime test paths impacted by error API migration
+
+## [1.17.6] - 2026-03-02
+
+### Changed
+- **Stats**: Refine `metric_set` merge logic and simplify conditional flow
+
+## [1.17.5] - 2026-02-27
+
+### Changed
+- **Documentation/OML**: Update OML grammar docs
+
+### Fixed
+- **Sinks/Buffer**: Fix `batch_size` behavior in sink batch path
+
+## [1.17.4] - 2026-02-18
+
+### Added
+- **Sinks/Config**: Add `batch_size` configuration to sink groups
+
+### Changed
+- **Sinks/Runtime**: Read and apply `batch_size` directly from `sink_group` configuration
+
+## [1.17.3] - 2026-02-16
 
 ### Added
 - **Sinks/Buffer**: Add sink-level batch buffer with configurable `batch_size` parameter

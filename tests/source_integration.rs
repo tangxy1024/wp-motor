@@ -15,7 +15,7 @@ use tokio::time::{Duration, timeout};
 use wp_conf::RunMode;
 use wp_engine::connectors::registry as reg;
 use wp_engine::sources::SourceConfigParser;
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 //=============================================================================
 // Test Constants and Utilities

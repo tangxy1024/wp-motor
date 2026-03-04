@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use orion_conf::{ToStructError, UvsFrom};
+use orion_conf::{ErrorWith, ToStructError, UvsFrom};
+use orion_error::ErrorOwe;
 use orion_variate::EnvDict;
 use wp_cli_core as wlib;
 use wp_engine::facade::config;
@@ -45,9 +46,13 @@ pub fn stat_sink_files(filters: &SinkStatFilters<'_>, dict: &EnvDict) -> RunResu
     let (cm, main) = config::load_warp_engine_confs(filters.work_root, dict)?;
     let ctx = build_ctx(&cm.work_root_path(), filters);
     let sink_root = Path::new(&cm.work_root_path()).join(main.sink_root());
-    ensure_sink_dirs(&sink_root, main.sink_root())?;
+    ensure_sink_dirs(&sink_root, main.sink_root())
+        .with(&sink_root)
+        .want("validate sink directory layout")?;
     let (rows, total) = wp_cli_core::collect_sink_statistics(&sink_root, &ctx, dict)
-        .map_err(|e| RunReason::from_conf().to_err())?;
+        .owe_conf()
+        .with(&sink_root)
+        .want("collect sink statistics")?;
     Ok(SinkStatResult { rows, total })
 }
 
@@ -68,8 +73,13 @@ pub fn stat_file_combined(
 
     // Collect sink statistics
     let sink_root = Path::new(&cm.work_root_path()).join(main.sink_root());
+    ensure_sink_dirs(&sink_root, main.sink_root())
+        .with(&sink_root)
+        .want("validate sink directory layout")?;
     let (rows, total) = wp_cli_core::collect_sink_statistics(&sink_root, &ctx, dict)
-        .map_err(|e| RunReason::from_conf().to_err())?;
+        .owe_conf()
+        .with(&sink_root)
+        .want("collect sink statistics")?;
 
     Ok(CombinedStatResult {
         src,
@@ -87,7 +97,7 @@ pub(crate) fn build_ctx(root: &str, filters: &SinkStatFilters<'_>) -> wlib::Ctx 
     }
 }
 
-pub(crate) fn ensure_sink_dirs(sink_root: &Path, sink_root_conf: &str) -> RunResult<()> {
+pub(crate) fn ensure_sink_dirs(sink_root: &Path, _sink_root_conf: &str) -> RunResult<()> {
     if has_v2_dirs(sink_root) {
         Ok(())
     } else {
@@ -134,6 +144,7 @@ mod tests {
         let temp = temp_workdir();
         let root = ensure_dir(temp.path(), "models/sinks");
         let err = ensure_sink_dirs(&root, "models/sinks").unwrap_err();
-        assert!(err.reason().to_string().contains("缺少"));
+        let msg = err.to_string();
+        assert!(msg.contains("configuration error"), "msg={}", msg);
     }
 }

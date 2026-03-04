@@ -1,4 +1,5 @@
-use orion_error::{ToStructError, UvsFrom};
+use orion_conf::ErrorWith;
+use orion_error::{ErrorOwe, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -53,11 +54,15 @@ impl Wpl {
             PathBuf::from("example/nginx/parse.wpl"),
             example_wpl_content,
         )
-        .map_err(|e| RunReason::from_conf().to_err())?;
+        .owe_conf()
+        .with("example/nginx/parse.wpl")
+        .want("build example wpl")?;
 
         let _pkg = code
             .parse_pkg()
-            .map_err(|e| RunReason::from_conf().to_err())?;
+            .owe_conf()
+            .with("example/nginx/parse.wpl")
+            .want("parse example wpl")?;
 
         // Create WPL directory and example files
         self.create_example_files(work_root)?;
@@ -115,10 +120,14 @@ impl Wpl {
                             return Err(RunReason::from_conf().to_err());
                         }
                         let code = WplCode::build(fp.clone(), raw.as_str())
-                            .map_err(|e| RunReason::from_conf().to_err())?;
+                            .owe_conf()
+                            .with(&fp)
+                            .want("build wpl code")?;
                         let _pkg = code
                             .parse_pkg()
-                            .map_err(|e| RunReason::from_conf().to_err())?;
+                            .owe_conf()
+                            .with(&fp)
+                            .want("parse wpl package")?;
                     }
                     return Ok(CheckStatus::Suc);
                 }
@@ -136,10 +145,14 @@ impl Wpl {
                 return Err(RunReason::from_conf().to_err());
             }
             let code = WplCode::build(fp.clone(), raw.as_str())
-                .map_err(|e| RunReason::from_conf().to_err())?;
+                .owe_rule()
+                .with(&fp)
+                .want("build wpl code")?;
             let _pkg = code
                 .parse_pkg()
-                .map_err(|e| RunReason::from_conf().to_err())?;
+                .owe_conf()
+                .with(&fp)
+                .want("parse wpl package")?;
         }
         Ok(CheckStatus::Suc)
     }

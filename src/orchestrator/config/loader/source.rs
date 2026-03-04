@@ -14,19 +14,23 @@ impl WarpConf {
         use crate::sources::config::SourceConfigParser;
 
         let wp_conf = EngineConfig::load_or_init(self.work_root(), dict)
-            .owe_conf()?
+            .owe_conf()
+            .with(self.work_root())
+            .want("load engine config")?
             .conf_absolutize(self.work_root());
         let path = PathBuf::from(wp_conf.src_conf_of(WPSRC_TOML));
-        let content = std::fs::read_to_string(&path).owe_conf().with(&path)?;
+        let content = std::fs::read_to_string(&path)
+            .owe_conf()
+            .with(&path)
+            .want("read source config file")?;
 
         // 仅支持统一 [[sources]] 配置；不再回退旧格式
         let parser = SourceConfigParser::new(self.work_root().to_path_buf());
         let specs = parser
             .parse_and_validate_only(&content, dict)
-            .map_err(|e| {
-                use orion_error::{ToStructError, UvsFrom};
-                wp_error::run_error::RunReason::from_conf().to_err()
-            })?;
+            .owe_conf()
+            .with(&path)
+            .want("parse source config")?;
         let mut out = Vec::new();
         for spec in specs.into_iter() {
             let f = FileSourceConf {

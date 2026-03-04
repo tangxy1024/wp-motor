@@ -80,6 +80,10 @@ impl MultiParser {
                     if matches!(e.reason(), WparseReason::Uvs(UvsReason::DataError)) {
                         best_wpl = wpl_line.wpl_key().clone();
                         best_error = Some(e.clone());
+                        if max_depth == 0 {
+                            // 当底层解析器未返回显式消费深度时，至少记录“已进入规则尝试”。
+                            max_depth = 1;
+                        }
                         //single wpl fail!
                         debug_edata!(event.event_id, "wpl parse fail: {}", wpl_line.wpl_key(),);
                     } else if best_error.is_none() {

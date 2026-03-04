@@ -64,7 +64,9 @@ impl SourceConfigParser {
             let svc = fac
                 .build(&resolved, &ctx)
                 .await
-                .map_err(|e| ConfIOReason::from_validation())?;
+                .owe_validation()
+                .with(resolved.name.as_str())
+                .want("build source instance")?;
             sources.extend(svc.sources);
             if let Some(acc) = svc.acceptor {
                 acceptors.push(acc);

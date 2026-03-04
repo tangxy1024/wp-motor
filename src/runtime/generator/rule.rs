@@ -10,12 +10,12 @@ use crate::runtime::generator::rule_source::RuleGenSource;
 use crate::runtime::generator::types::GenGRA;
 use crate::runtime::supervisor::monitor::ActorMonitor;
 use crate::sinks::SinkBackendType;
-use orion_error::{ErrorOwe, ErrorWith, UvsReason};
+use orion_error::{ErrorOwe, ErrorWith};
 use orion_variate::EnvDict;
 use tokio::task::JoinHandle;
 use wp_conf::stat::StatConf;
 use wp_conf::structure::SinkInstanceConf;
-use wp_error::run_error::{RunError, RunErrorOwe, RunResult};
+use wp_error::run_error::{RunErrorOwe, RunResult};
 use wp_log::info_ctrl;
 use wp_stat::StatRecorder;
 use wp_stat::StatStage; // for record_task
@@ -32,15 +32,19 @@ async fn send_unit_rules(
     let rules_len = src.rule_len().max(1);
     let mut sent = 0usize;
     for _ in 0..unit_cnt {
-        let ffv = src.gen_one(*cur_idx).map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
-        })?;
+        let ffv = src
+            .gen_one(*cur_idx)
+            .owe_conf()
+            .with(format!("rule_idx={}", *cur_idx))
+            .want("generate rule record")?;
         *cur_idx = (*cur_idx + 1) % rules_len;
         // 将 FmtFieldVec 转换为字符串并调用 sink_str
         let raw_line = wpl::generator::RAWGenFmt(&ffv).to_string();
         wp_connector_api::AsyncRawDataSink::sink_str(sink, &raw_line)
             .await
-            .owe_sink()?;
+            .owe_sink()
+            .with("gen_direct_rule")
+            .want("write rule record to sink")?;
         collectors.record_task("gen_direct_rule", ());
         sent += 1;
     }
@@ -65,10 +69,13 @@ pub async fn run_rule_direct(
     );
     let units = crate::core::generator::rules::load_gen_confs(rule_root, dict)
         .owe_rule()
+        .with(rule_root)
         .want("load rule")?;
     info_ctrl!("run_rule_direct: loaded {} rule units", units.len());
     let source = RuleGenSource::from_units(units)
-        .map_err(|e| RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf())))?;
+        .owe_conf()
+        .with(rule_root)
+        .want("build rule source from units")?;
     let source = std::sync::Arc::new(source);
     let parallel = std::cmp::max(1, gar.parallel);
     let batch = default_batch();
@@ -130,9 +137,11 @@ pub async fn run_rule_direct(
 
     let mut total_produced: usize = 0;
     for t in tasks {
-        let n = t.await.map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
-        })??;
+        let n = t
+            .await
+            .owe_conf()
+            .with("gen_direct_rule")
+            .want("join rule pipeline task")??;
         total_produced += n;
     }
     info_ctrl!("run_rule_direct: all pipelines finished");

@@ -87,7 +87,8 @@ impl WarpConf {
     ) -> OrionConfResult<(String, ConnectorRec)> {
         let wp_conf = EngineConfig::load_or_init(self.work_root(), dict)
             .owe_res()
-            .with("load_or_init")?
+            .with("load_or_init")
+            .want("load engine config")?
             .conf_absolutize(self.work_root());
         let configured_root = wp_conf.sinks_root().to_string();
         let configured_path = Path::new(&configured_root);
@@ -118,10 +119,16 @@ impl WarpConf {
         let mut merged = conn.default_params.clone();
         for (k, v) in override_tbl.iter() {
             if k == "params" || k == "params_override" {
-                return ConfIOReason::from_validation().err_result();
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with(conn_id)
+                    .want("nested params/params_override is not allowed"));
             }
             if !conn.allow_override.iter().any(|x| x == k) {
-                return ConfIOReason::from_validation().err_result();
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with(conn_id)
+                    .want(format!("override '{}' not allowed", k)));
             }
             merged.insert(k.clone(), param_value_from_toml(v));
         }

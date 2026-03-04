@@ -1,7 +1,8 @@
-use orion_error::{ToStructError, UvsFrom};
+use orion_conf::ErrorWith;
+use orion_error::ErrorOwe;
 use orion_variate::EnvDict;
 use std::path::Path;
-use wp_error::run_error::{RunReason, RunResult};
+use wp_error::run_error::RunResult;
 
 /// 清理 sinks 输出数据
 pub fn clean_outputs(work_root: &str, dict: &EnvDict) -> RunResult<bool> {
@@ -14,7 +15,9 @@ pub fn clean_outputs(work_root: &str, dict: &EnvDict) -> RunResult<bool> {
     }
 
     let (_, main_conf) = wp_engine::facade::config::load_warp_engine_confs(work_root, dict)
-        .map_err(|e| RunReason::from_conf().to_err())?;
+        .owe_conf()
+        .with(work_root)
+        .want("load engine config for sink clean")?;
 
     let sink_root = Path::new(&conf_manager.work_root_path()).join(main_conf.sink_root());
 

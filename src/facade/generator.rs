@@ -4,7 +4,8 @@ pub use crate::core::generator::rules::{GenRuleUnit, fetch_oml_data, load_gen_co
 pub use crate::runtime::generator::types::{GenGRA, RuleGRA, SampleGRA};
 
 use crate::sinks::SinkBackendType;
-use wp_error::run_error::{RunError, RunReason, RunResult};
+use orion_error::ErrorWith;
+use wp_error::run_error::RunResult;
 
 /// Backward‑compatible helper: run rule generator with preloaded rule units and a ready sink.
 ///
@@ -18,12 +19,14 @@ pub async fn rule_gen_run(
 ) -> RunResult<()> {
     // 全局 backoff gate 已移除；由发送单元在构建期与实时水位自决。
     use crate::runtime::generator::rule_source::RuleGenSource;
-    use orion_error::UvsReason;
+    use orion_error::ErrorOwe;
     use wp_error::run_error::RunErrorOwe;
 
     // Compile rules once; map compile error into RunError (UVS/conf)
     let src = RuleGenSource::from_units(rules)
-        .map_err(|e| RunError::from(RunReason::Uvs(UvsReason::core_conf())))?;
+        .owe_conf()
+        .with("rule_gen_run")
+        .want("build rule generator source")?;
 
     let total = args.gen_conf.total_line.unwrap_or(0);
     if total == 0 {
@@ -45,14 +48,18 @@ pub async fn rule_gen_run(
         let step = batch.min(remain).max(1);
         let rows = src
             .gen_batch(cur, step)
-            .map_err(|e| RunError::from(RunReason::Uvs(UvsReason::core_conf())))?;
+            .owe_conf()
+            .with(format!("offset={},count={}", cur, step))
+            .want("generate rule batch")?;
         cur = (cur + step) % src.rule_len().max(1);
         for ffv in rows {
             // 将 FmtFieldVec 转换为字符串并调用 sink_str
             let raw_line = wpl::generator::RAWGenFmt(&ffv).to_string();
             wp_connector_api::AsyncRawDataSink::sink_str(&mut sink, &raw_line)
                 .await
-                .owe_sink()?; // map sink error into RunError(Dist)
+                .owe_sink()
+                .with("rule_gen_run")
+                .want("write generated rule line to sink")?; // map sink error into RunError(Dist)
             produced += 1;
         }
     }
@@ -70,6 +77,7 @@ pub async fn sample_gen_run(
     files: Vec<std::path::PathBuf>,
 ) -> RunResult<()> {
     // 全局 backoff gate 已移除；由发送单元在构建期与实时水位自决。
+    use orion_error::ErrorOwe;
     use std::io::BufRead;
     use wp_connector_api::AsyncRawDataSink;
     use wp_error::run_error::RunErrorOwe;
@@ -78,7 +86,9 @@ pub async fn sample_gen_run(
     let mut samples: Vec<String> = Vec::new();
     for f in files {
         let file = std::fs::File::open(&f)
-            .map_err(|e| RunError::from(RunReason::Uvs(orion_error::UvsReason::core_conf())))?;
+            .owe_conf()
+            .with(&f)
+            .want("open sample file")?;
         let reader = std::io::BufReader::new(file);
         for s in reader.lines().map_while(Result::ok) {
             samples.push(s);
@@ -89,7 +99,11 @@ pub async fn sample_gen_run(
     }
     let total = args.gen_conf.total_line.unwrap_or(samples.len());
     for s in samples.iter().cycle().take(total) {
-        AsyncRawDataSink::sink_str(&mut sink, s).await.owe_sink()?; // map sink error into RunError(Dist)
+        AsyncRawDataSink::sink_str(&mut sink, s)
+            .await
+            .owe_sink()
+            .with("sample_gen_run")
+            .want("write generated sample line to sink")?; // map sink error into RunError(Dist)
     }
     Ok(())
 }

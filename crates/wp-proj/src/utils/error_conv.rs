@@ -72,17 +72,22 @@ pub trait ResultExt<T, E> {
 /// 为所有 Result<T, E> 实现 ResultExt，其中 E 实现了 Display
 impl<T, E: std::fmt::Display> ResultExt<T, E> for Result<T, E> {
     fn to_run_err(self, context: &str) -> RunResult<T> {
-        self.map_err(|e| RunReason::from_conf().to_err())
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("{}: {}", context, e))),
+        }
     }
 
     fn to_run_err_with<F>(self, f: F) -> RunResult<T>
     where
         F: FnOnce(&E) -> String,
     {
-        self.map_err(|e| {
-            let msg = f(&e);
-            RunReason::from_conf().to_err()
-        })
+        match self {
+            Ok(v) => Ok(v),
+            Err(e) => Err(RunReason::from_conf().to_err().with_detail(f(&e))),
+        }
     }
 }
 

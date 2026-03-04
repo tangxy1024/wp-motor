@@ -7,13 +7,14 @@ use crate::runtime::generator::types::GenGRA;
 use crate::runtime::supervisor::monitor::ActorMonitor;
 use crate::sinks::SinkBackendType;
 use crate::stat::metric_collect::MetricCollectors;
-use orion_error::UvsReason;
+use orion_conf::ErrorWith;
+use orion_error::{ErrorOwe, ToStructError, UvsFrom};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::task::JoinHandle;
 use wp_conf::stat::StatConf;
 use wp_conf::structure::SinkInstanceConf;
-use wp_error::run_error::{RunError, RunErrorOwe, RunResult};
+use wp_error::run_error::{RunErrorOwe, RunReason, RunResult};
 use wp_log::info_ctrl;
 use wp_stat::{StatRecorder, StatStage};
 
@@ -21,19 +22,20 @@ fn load_samples(rule_root: &str, find_name: &str) -> RunResult<Vec<String>> {
     use std::io::BufRead;
     // discover files
     let files = wp_conf::utils::find_conf_files(rule_root, find_name)
-        .map_err(|e| RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf())))?;
+        .owe_conf()
+        .with(rule_root)
+        .want("find sample files")?;
     info_ctrl!("run_sample_direct: found {} files", files.len());
     if files.is_empty() {
-        return Err(RunError::from(wp_error::run_error::RunReason::Uvs(
-            UvsReason::core_conf(),
-        )));
+        return Err(RunReason::from_conf().to_err());
     }
     // load lines
     let mut out = Vec::new();
     for f in files {
-        let file = std::fs::File::open(&f).map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
-        })?;
+        let file = std::fs::File::open(&f)
+            .owe_conf()
+            .with(&f)
+            .want("open sample file")?;
         let reader = std::io::BufReader::new(file);
         for s in reader.lines().map_while(Result::ok) {
             out.push(s);
@@ -56,7 +58,9 @@ async fn send_unit_samples(
         let line = &samples[*cur_idx];
         wp_connector_api::AsyncRawDataSink::sink_str(sink, line.as_str())
             .await
-            .owe_sink()?;
+            .owe_sink()
+            .with("gen_direct")
+            .want("write sample line to sink")?;
         // 按条统计
         collectors.record_task("gen_direct", ());
         *cur_idx = (*cur_idx + 1) % n;
@@ -328,9 +332,11 @@ pub async fn run_sample_direct(
     }
     let mut total_produced: usize = 0;
     for t in tasks {
-        let produced = t.await.map_err(|e| {
-            RunError::from(wp_error::run_error::RunReason::Uvs(UvsReason::core_conf()))
-        })??;
+        let produced = t
+            .await
+            .owe_conf()
+            .with("gen_direct")
+            .want("join sample pipeline task")??;
         total_produced += produced;
     }
     info_ctrl!("run_sample_direct: all pipelines finished");

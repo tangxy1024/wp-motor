@@ -1,4 +1,5 @@
-use orion_error::{ToStructError, UvsFrom};
+use orion_conf::ErrorWith;
+use orion_error::{ErrorOwe, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -95,7 +96,9 @@ rule = "/example/*"
             .to_str()
             .ok_or_else(|| RunReason::from_conf().to_err())?;
         let oml_files = find_conf_files(root_str, WPARSE_OML_FILE)
-            .map_err(|e| RunReason::from_conf().to_err())?;
+            .owe_conf()
+            .with(root_str)
+            .want("find oml files")?;
         if oml_files.is_empty() {
             return Ok(CheckStatus::Miss);
         }
@@ -103,7 +106,10 @@ rule = "/example/*"
             ErrorHandler::check_file_not_empty(f, "OML")?;
         }
 
-        fetch_oml_data(root_str, WPARSE_OML_FILE).map_err(|e| RunReason::from_conf().to_err())?;
+        fetch_oml_data(root_str, WPARSE_OML_FILE)
+            .owe_rule()
+            .with(root_str)
+            .want("parse oml models")?;
         Ok(CheckStatus::Suc)
     }
 }

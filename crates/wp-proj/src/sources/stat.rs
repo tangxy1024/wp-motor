@@ -1,9 +1,10 @@
-use orion_conf::{ToStructError, UvsFrom};
+use orion_conf::ErrorWith;
+use orion_error::ErrorOwe;
 use orion_variate::EnvDict;
 use std::path::Path;
 use wp_cli_core::Ctx;
 use wp_engine::facade::config;
-use wp_error::run_error::{RunReason, RunResult};
+use wp_error::run_error::RunResult;
 
 /// Result structure for file source statistics
 ///
@@ -24,7 +25,9 @@ pub struct SourceStatResult {
 pub fn stat_file_sources(work_root: &str, dict: &EnvDict) -> RunResult<SourceStatResult> {
     // Load engine configuration to get source settings
     let (cm, main) = config::load_warp_engine_confs(work_root, dict)
-        .map_err(|e| RunReason::from_conf().to_err())?;
+        .owe_conf()
+        .with(work_root)
+        .want("load engine config for source stats")?;
 
     // Resolve the actual work root path
     let resolved = cm.work_root_path();

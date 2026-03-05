@@ -4,7 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-## [1.17.3 Unreleased]
+## [1.17.8 Unreleased]
+
+### Fixed
+- **wp-lang**: Fix WPL engine/runtime parsing for `kv` and `kvarr` keys containing `()`, `[]`, `<>`, and `{}` (for example `protocal(80)`, `arr[0]`, `list<int>`, `set{a}`)
+- **wp-lang**: Fix `@...` field reference path parsing to support bracket-style keys without consuming outer WPL syntax delimiters
+
+## [1.17.3-alpha] - 2026-02-16
 
 ### Added
 - **Sinks/Buffer**: Add sink-level batch buffer with configurable `batch_size` parameter
@@ -18,7 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **wp-oml**: Fix llvm-cov warnings in parser and test modules
-
 
 ## [1.17.2 ] - 2026-02-13
 ### Changed

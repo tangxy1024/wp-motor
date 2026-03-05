@@ -12,17 +12,81 @@ use wp_parser::symbol::ctx_desc;
 
 //#[allow(clippy::nonminimal_bool)]
 pub fn take_ref_path<'a>(input: &mut &'a str) -> WResult<&'a str> {
-    take_while(1.., |c: char| {
-        c.is_alphanumeric()
-            || c == '_'
-            || c == '/'
-            || c == '-'
-            || c == '.'
-            || c == '['
-            || c == ']'
-            || c == '*'
-    })
-    .parse_next(input)
+    let s = *input;
+    let mut pos = 0usize;
+    let mut paren_depth = 0usize;
+
+    while pos < s.len() {
+        let rest = &s[pos..];
+        let ch = rest.chars().next().expect("pos bounds checked");
+        let ch_len = ch.len_utf8();
+        match ch {
+            ')' if paren_depth == 0 => break,
+            '(' => {
+                paren_depth += 1;
+                pos += ch_len;
+            }
+            ')' => {
+                paren_depth = paren_depth.saturating_sub(1);
+                pos += ch_len;
+            }
+            '<' => {
+                if let Some(seg_len) = parse_wrapped_key_segment(rest, '<', '>') {
+                    pos += seg_len;
+                } else {
+                    break;
+                }
+            }
+            '{' => {
+                if let Some(seg_len) = parse_wrapped_key_segment(rest, '{', '}') {
+                    pos += seg_len;
+                } else {
+                    break;
+                }
+            }
+            '>' | '}' => break,
+            _ => {
+                let allowed =
+                    ch.is_alphanumeric() || matches!(ch, '_' | '/' | '-' | '.' | '[' | ']' | '*');
+                if !allowed {
+                    break;
+                }
+                pos += ch_len;
+            }
+        }
+    }
+
+    if pos == 0 {
+        return fail.context(ctx_desc("<ref_path>")).parse_next(input);
+    }
+
+    let (head, tail) = s.split_at(pos);
+    *input = tail;
+    Ok(head)
+}
+
+fn parse_wrapped_key_segment(s: &str, open: char, close: char) -> Option<usize> {
+    let mut iter = s.char_indices();
+    let (_, first) = iter.next()?;
+    if first != open {
+        return None;
+    }
+    let mut has_inner = false;
+    for (idx, ch) in iter {
+        if ch == close {
+            return has_inner.then_some(idx + ch.len_utf8());
+        }
+        if !is_wrapped_key_char(ch) {
+            return None;
+        }
+        has_inner = true;
+    }
+    None
+}
+
+#[inline]
+fn is_wrapped_key_char(ch: char) -> bool {
+    ch.is_alphanumeric() || matches!(ch, '_' | '/' | '-' | '.')
 }
 
 /// Parse field reference path: supports either bare identifiers or single-quoted strings
@@ -715,6 +779,31 @@ mod tests {
         assert_eq!(
             take_ref_path_or_quoted.parse_peek("process/path[0]"),
             Ok(("", "process/path[0]".to_string()))
+        );
+        assert_eq!(
+            take_ref_path_or_quoted.parse_peek("list<int>"),
+            Ok(("", "list<int>".to_string()))
+        );
+        assert_eq!(
+            take_ref_path_or_quoted.parse_peek("set{a}"),
+            Ok(("", "set{a}".to_string()))
+        );
+        assert_eq!(
+            take_ref_path_or_quoted.parse_peek("curr<[,]>"),
+            Ok(("<[,]>", "curr".to_string()))
+        );
+        assert_eq!(
+            take_ref_path_or_quoted.parse_peek("curr{\\s(\\S=)}"),
+            Ok(("{\\s(\\S=)}", "curr".to_string()))
+        );
+
+        assert_eq!(
+            take_ref_path_or_quoted.parse_peek("protocal(80)"),
+            Ok(("", "protocal(80)".to_string()))
+        );
+        assert_eq!(
+            take_ref_path_or_quoted.parse_peek("protocal(80))"),
+            Ok((")", "protocal(80)".to_string()))
         );
 
         // Test single quotes are raw strings - \n, \t are literal

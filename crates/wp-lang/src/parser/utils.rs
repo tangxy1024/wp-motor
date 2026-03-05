@@ -39,9 +39,7 @@ pub fn take_ref_path<'a>(input: &mut &'a str) -> WResult<&'a str> {
     }
 
     if end == 0 {
-        return fail
-            .context(ctx_desc("<ref_path>"))
-            .parse_next(input);
+        return fail.context(ctx_desc("<ref_path>")).parse_next(input);
     }
 
     let (head, tail) = s.split_at(end);

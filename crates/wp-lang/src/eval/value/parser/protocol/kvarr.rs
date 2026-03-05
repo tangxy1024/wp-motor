@@ -541,8 +541,8 @@ mod tests {
 
     #[test]
     fn test_kvarr_bracket_keys_with_sub_fields() -> AnyResult<()> {
-        let conf = WplField::try_parse("kvarr(bool@arr[0], digit@list<int>, chars@set{a})\\,")
-            .assert();
+        let conf =
+            WplField::try_parse("kvarr(bool@arr[0], digit@list<int>, chars@set{a})\\,").assert();
         let mut data = "arr[0]=true, list<int>=100, set{a}=value";
         let parser = ParserTUnit::new(KvArrP::default(), conf);
         let fields = parser.verify_parse_suc(&mut data).assert();

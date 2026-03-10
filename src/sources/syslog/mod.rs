@@ -43,7 +43,6 @@ pub use tcp_source::TcpSyslogSource;
 pub use udp_source::UdpSyslogSource;
 mod tcp_tests;
 
-
 /// Register the syslog source factory
 pub fn register_syslog_factory() {
     wp_core_connectors::registry::register_source_factory(factory::SyslogSourceFactory::new());

@@ -6,8 +6,8 @@ use serde_derive::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use wp_conf::structure::SourceInstanceConf;
 use wp_connector_api::{AcceptorHandle, SourceBuildCtx, SourceHandle};
-use wp_log::info_ctrl;
 use wp_core_connectors::registry;
+use wp_log::info_ctrl;
 
 use wp_conf::sources::core_to_resolved_with;
 /// 统一格式：[[sources]] 列表

@@ -1,13 +1,13 @@
-use orion_conf::UvsConfFrom;
-use orion_error::ToStructError;
+use orion_conf::{ErrorWith, UvsFrom};
+use orion_error::ErrorOweBase;
 use serde_json::json;
 use wp_conf::connectors::{ConnectorDef, ConnectorScope, ParamMap};
 use wp_conf_base::ConfParser;
+use wp_connector_api::SourceDefProvider;
 use wp_connector_api::{
-    AcceptorHandle, SourceBuildCtx, SourceFactory, SourceHandle, SourceMeta, SourceResult,
-    SourceSpec as ResolvedSourceSpec, SourceSvcIns, Tags,
+    AcceptorHandle, SourceBuildCtx, SourceFactory, SourceHandle, SourceMeta, SourceReason,
+    SourceResult, SourceSpec as ResolvedSourceSpec, SourceSvcIns, Tags,
 };
-use wp_connector_api::{SourceDefProvider, SourceReason};
 
 use super::TcpAcceptor;
 use super::config::TcpSourceSpec;
@@ -35,7 +35,9 @@ impl SourceFactory for TcpSourceFactory {
             TcpSourceSpec::from_params(&spec.params)?;
             Ok(())
         })();
-        res.map_err(|e| SourceReason::from_conf(e.to_string()).to_err())
+        res.owe(SourceReason::from_conf())
+            .with(spec.name.as_str())
+            .want("validate tcp source spec")
     }
 
     async fn build(
@@ -96,8 +98,10 @@ impl SourceFactory for TcpSourceFactory {
                 .with_acceptor(acceptor_handle))
         };
 
-        fut.await
-            .map_err(|e: anyhow::Error| SourceReason::from_conf(e.to_string()).to_err())
+        let fut: anyhow::Result<SourceSvcIns> = fut.await;
+        fut.owe(SourceReason::from_conf())
+            .with(spec.name.as_str())
+            .want("build tcp source service")
     }
 }
 
@@ -136,7 +140,7 @@ mod tests {
     use super::*;
     use tokio::net::TcpStream;
     use wp_connector_api::{SourceFactory, SourceSpec as ResolvedSourceSpec};
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     #[tokio::test]
     async fn factory_builds_with_ephemeral_port() {

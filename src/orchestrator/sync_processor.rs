@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use wp_conf::RunArgs;
 use wp_connector_api::{SourceEvent, Tags};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 use wpl::{DEFAULT_KEY, gen_pkg_id};
 // Import macros
 use wpl::{true_break, true_continue};

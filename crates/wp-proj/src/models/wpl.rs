@@ -1,4 +1,5 @@
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_conf::ErrorWith;
+use orion_error::{ErrorOwe, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -53,11 +54,15 @@ impl Wpl {
             PathBuf::from("example/nginx/parse.wpl"),
             example_wpl_content,
         )
-        .map_err(|e| RunReason::from_conf(format!("build example wpl failed: {}", e)).to_err())?;
+        .owe_conf()
+        .with("example/nginx/parse.wpl")
+        .want("build example wpl")?;
 
-        let _pkg = code.parse_pkg().map_err(|e| {
-            RunReason::from_conf(format!("parse example wpl failed: {}", e)).to_err()
-        })?;
+        let _pkg = code
+            .parse_pkg()
+            .owe_conf()
+            .with("example/nginx/parse.wpl")
+            .want("parse example wpl")?;
 
         // Create WPL directory and example files
         self.create_example_files(work_root)?;
@@ -112,20 +117,17 @@ impl Wpl {
                     for fp in wpl_files {
                         let raw = std::fs::read_to_string(&fp).unwrap_or_default();
                         if raw.trim().is_empty() {
-                            return Err(RunReason::from_conf(format!(
-                                "配置错误: WPL文件为空: {:?}",
-                                fp
-                            ))
-                            .to_err());
+                            return Err(RunReason::from_conf().to_err());
                         }
-                        let code = WplCode::build(fp.clone(), raw.as_str()).map_err(|e| {
-                            RunReason::from_conf(format!("build wpl failed: {:?}: {}", fp, e))
-                                .to_err()
-                        })?;
-                        let _pkg = code.parse_pkg().map_err(|e| {
-                            RunReason::from_conf(format!("parse wpl failed: {:?}: {}", fp, e))
-                                .to_err()
-                        })?;
+                        let code = WplCode::build(fp.clone(), raw.as_str())
+                            .owe_conf()
+                            .with(&fp)
+                            .want("build wpl code")?;
+                        let _pkg = code
+                            .parse_pkg()
+                            .owe_conf()
+                            .with(&fp)
+                            .want("parse wpl package")?;
                     }
                     return Ok(CheckStatus::Suc);
                 }
@@ -140,16 +142,17 @@ impl Wpl {
         for fp in rules {
             let raw = std::fs::read_to_string(&fp).unwrap_or_default();
             if raw.trim().is_empty() {
-                return Err(
-                    RunReason::from_conf(format!("配置错误: WPL文件为空: {:?}", fp)).to_err(),
-                );
+                return Err(RunReason::from_conf().to_err());
             }
-            let code = WplCode::build(fp.clone(), raw.as_str()).map_err(|e| {
-                RunReason::from_conf(format!("build wpl failed: {:?}: {}", fp, e)).to_err()
-            })?;
-            let _pkg = code.parse_pkg().map_err(|e| {
-                RunReason::from_conf(format!("parse wpl failed: {:?}: {}", fp, e)).to_err()
-            })?;
+            let code = WplCode::build(fp.clone(), raw.as_str())
+                .owe_rule()
+                .with(&fp)
+                .want("build wpl code")?;
+            let _pkg = code
+                .parse_pkg()
+                .owe_conf()
+                .with(&fp)
+                .want("parse wpl package")?;
         }
         Ok(CheckStatus::Suc)
     }

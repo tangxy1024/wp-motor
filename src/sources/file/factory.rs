@@ -1,7 +1,7 @@
 use super::source::{FileEncoding, FileSource};
 use async_trait::async_trait;
-use orion_conf::{ErrorWith, UvsConfFrom};
-use orion_error::{ToStructError, UvsDataFrom};
+use orion_conf::{ErrorWith, UvsFrom};
+use orion_error::ErrorOweBase;
 use serde_json::json;
 use std::path::Path;
 use wp_conf::connectors::{ConnectorDef, ConnectorScope, ParamMap};
@@ -80,7 +80,9 @@ impl SourceFactory for FileSourceFactory {
             FileSourceSpec::from_resolved(resolved)?;
             Ok(())
         })();
-        res.map_err(|e| SourceReason::from_conf(e.to_string()).to_err())
+        res.owe(SourceReason::from_conf())
+            .with(resolved.name.as_str())
+            .want("validate file source spec")
     }
 
     async fn build(
@@ -92,13 +94,7 @@ impl SourceFactory for FileSourceFactory {
             let spec = FileSourceSpec::from_resolved(resolved)?;
             let tagset = Tags::from_parse(&resolved.tags);
             let ranges = compute_file_ranges(Path::new(&spec.path), spec.instances)
-                .map_err(|e| {
-                    SourceReason::from_data(
-                        format!("Failed to compute file ranges: {}", e),
-                        Some(0),
-                    )
-                    .to_err()
-                })
+                .owe(SourceReason::from_data())
                 .with(spec.path.as_str())
                 .want("open source file")?;
             let mut handles = Vec::with_capacity(ranges.len());
@@ -117,8 +113,7 @@ impl SourceFactory for FileSourceFactory {
                     start,
                     end,
                 )
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create FileSource: {}", e))?;
+                .await?;
                 let mut meta = SourceMeta::new(key, resolved.kind.clone());
                 for (k, v) in tagset.iter() {
                     meta.tags.set(k, v);
@@ -128,8 +123,10 @@ impl SourceFactory for FileSourceFactory {
             Ok(SourceSvcIns::new().with_sources(handles))
         };
 
-        fut.await
-            .map_err(|e: anyhow::Error| SourceReason::from_conf(e.to_string()).to_err())
+        let fut: anyhow::Result<SourceSvcIns> = fut.await;
+        fut.owe(SourceReason::from_conf())
+            .with(resolved.name.as_str())
+            .want("build file source service")
     }
 }
 

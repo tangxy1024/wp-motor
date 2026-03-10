@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SKILL_MD_DIR="$ROOT_DIR/.claude/skills"
+SKILL_SCRIPT_DIR="$ROOT_DIR/scripts/skills"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  scripts/claude-skill list
+  scripts/claude-skill run <skill-name> [args...]
+
+Examples:
+  scripts/claude-skill list
+  scripts/claude-skill run cargo-check-all
+  scripts/claude-skill run update-changelog --check
+  scripts/claude-skill run update-changelog --write
+EOF
+}
+
+list_skills() {
+    if [[ ! -d "$SKILL_MD_DIR" ]]; then
+        echo "No skill directory found: $SKILL_MD_DIR" >&2
+        exit 1
+    fi
+    find "$SKILL_MD_DIR" -maxdepth 1 -name '*.md' -type f \
+        | sed 's#.*/##' \
+        | sed 's#\.md$##' \
+        | sort
+}
+
+run_skill() {
+    local skill="${1:-}"
+    shift || true
+    local script="$SKILL_SCRIPT_DIR/${skill}.sh"
+    if [[ ! -f "$script" ]]; then
+        echo "No automation script for skill: $skill" >&2
+        echo "Tip: add $script to automate it." >&2
+        exit 2
+    fi
+    exec "$script" "$@"
+}
+
+cmd="${1:-}"
+case "$cmd" in
+list)
+    list_skills
+    ;;
+run)
+    shift || true
+    run_skill "${1:-}" "${@:2}"
+    ;;
+""|-h|--help|help)
+    usage
+    ;;
+*)
+    echo "Unknown command: $cmd" >&2
+    usage
+    exit 1
+    ;;
+esac
+

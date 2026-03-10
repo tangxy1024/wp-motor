@@ -53,7 +53,7 @@ impl Sinks {
         sinks_core::validate_routes(self.work_root().to_string_lossy().as_ref(), dict)
             .err_conv()?;
         Ok(CheckStatus::Suc)
-        //.map_err(|e| RunReason::from_conf(e.to_string()).to_err())
+        //.map_err(|e| RunReason::from_conf().to_err())
     }
 
     pub fn route_rows(

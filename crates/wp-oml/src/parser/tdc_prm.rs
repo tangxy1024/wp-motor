@@ -33,7 +33,7 @@ pub fn oml_batch_gw_get(data: &mut &str) -> WResult<BatchEvaluation> {
 mod tests {
     use crate::parser::tdc_prm::{oml_aga_tdc, oml_aga_value};
     use crate::parser::utils::for_test::assert_oml_parse;
-    use orion_error::{ToStructError, UvsConfFrom};
+    use orion_error::{ToStructError, UvsFrom};
     use wp_error::OMLCodeReason;
     use wp_error::parse_error::OMLCodeResult;
     use wp_parser::Parser;
@@ -51,7 +51,7 @@ mod tests {
 
         let mut code = r#"take() "#;
         let x = oml_aga_tdc.parse_next(&mut code).map_err(|e| {
-            OMLCodeReason::from_conf(code.to_string())
+            OMLCodeReason::from_conf()
                 .to_err()
                 .with_detail(e.to_string())
         })?;

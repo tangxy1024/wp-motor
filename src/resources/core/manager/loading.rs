@@ -6,8 +6,8 @@ use crate::resources::utils::{load_engine_code, load_oml_code};
 use crate::sinks::SinkGroupAgent;
 use oml::core::ConfADMExt;
 use oml::language::{DataModel, ObjModel};
-use orion_conf::{ErrorWith, UvsConfFrom};
-use orion_error::{ErrorConv, ErrorOwe, OperationContext, ToStructError, UvsLogicFrom};
+use orion_conf::{ErrorWith, UvsFrom};
+use orion_error::{ErrorConv, ErrorOwe, OperationContext, ToStructError};
 use orion_variate::EnvDict;
 use wp_conf::engine::EngineConfig;
 use wp_error::RunReason;
@@ -36,10 +36,7 @@ impl ResManager {
     pub async fn load_all_ldm(&mut self, oml_root: &str) -> RunResult<()> {
         info_ctrl!("load all oml model");
         let oml_spc = load_oml_code(oml_root).await?;
-        let wpl_index = self
-            .wpl_index
-            .clone()
-            .ok_or(RunReason::from_logic("not init  wpl all rule key"))?;
+        let wpl_index = self.wpl_index.clone().ok_or(RunReason::from_logic())?;
         for (path, _code) in oml_spc.items {
             if std::path::Path::new(path.as_str()).exists() && path.ends_with(".oml") {
                 let mdl = ObjModel::load(path.as_str())
@@ -79,10 +76,7 @@ impl ResManager {
         dict: &EnvDict,
     ) -> RunResult<SinkRouteTable> {
         let mut op = OperationContext::want("load all sink").with_auto_log();
-        let wpl_index = self
-            .wpl_index
-            .clone()
-            .ok_or(RunReason::from_logic("not init  wpl all rule key"))?;
+        let wpl_index = self.wpl_index.clone().ok_or(RunReason::from_logic())?;
 
         let mut sink_route = SinkRouteTable::default();
         let busin_d = Path::new(sink_root).join("business.d");
@@ -100,7 +94,7 @@ impl ResManager {
             op.mark_suc();
             Ok(sink_route)
         } else {
-            RunReason::from_conf("business and infra sink route not exists").err_result()
+            RunReason::from_conf().err_result()
         }
     }
 }

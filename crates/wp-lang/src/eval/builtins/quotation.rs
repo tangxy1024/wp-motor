@@ -1,7 +1,8 @@
 use bytes::Bytes;
 use orion_error::{ErrorOwe, ErrorWith};
 use std::sync::Arc;
-use wp_parse_api::{PipeProcessor, RawData, WparseResult};
+use wp_model_core::raw::RawData;
+use wp_parse_api::{PipeProcessor, WparseResult};
 
 #[derive(Debug)]
 pub struct EscQuotaProc;
@@ -59,7 +60,7 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     #[test]
     fn test_quotation() -> AnyResult<()> {

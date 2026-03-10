@@ -14,7 +14,7 @@ use std::sync::Arc;
 use tokio::time::sleep;
 use wp_connector_api::{SinkError, SourceEvent};
 use wp_error::error_handling::{ErrorHandlingStrategy, sys_robust_mode};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 use wpl::{PkgID, WparseError, WparseReason, WparseResult};
 
 impl WplEngine {
@@ -137,14 +137,16 @@ impl WplEngine {
             ErrorHandlingStrategy::FixRetry => {
                 // 这里的错误处理可能需要更复杂的逻辑
                 let msg = format!("sink send error (fix_retry): {}", e);
+                error_data!("{}", msg);
                 Err(WparseError::from(WparseReason::Uvs(
-                    UvsReason::SystemError(msg),
+                    UvsReason::system_error(),
                 )))
             }
             ErrorHandlingStrategy::Throw => {
                 let msg = format!("sink send error: {}", e);
+                error_data!("{}", msg);
                 Err(WparseError::from(WparseReason::Uvs(
-                    UvsReason::SystemError(msg),
+                    UvsReason::system_error(),
                 )))
             }
             ErrorHandlingStrategy::Terminate => Ok(()),

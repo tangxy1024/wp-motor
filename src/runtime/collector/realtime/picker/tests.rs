@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use wp_connector_api::{DataSource, SourceBatch, SourceEvent, Tags};
 use wp_connector_api::{SourceError, SourceReason, SourceResult};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 // Basic smoke-tests to ensure signatures and lifecycle keep working after refactor.
 

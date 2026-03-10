@@ -119,7 +119,7 @@ mod tests {
     use crate::types::AnyResult;
     use orion_error::TestAssert;
     use wp_model_core::model::{DataRecord, Value};
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     use super::*;
     #[allow(clippy::approx_constant)]

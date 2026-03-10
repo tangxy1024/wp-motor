@@ -6,11 +6,12 @@ pub use options::{CheckComponent, CheckComponents, CheckOptions};
 pub use types::{Cell, ConnectorCounts, Row, SourceBreakdown};
 
 use report::{build_detail_table, component_cells};
+use std::path::Path;
 use std::path::PathBuf;
 
 use super::warp::WarpProject;
 use crate::types::CheckStatus;
-use orion_conf::UvsConfFrom;
+use orion_conf::UvsFrom;
 use orion_error::ToStructError;
 use orion_variate::EnvDict;
 use wp_cli_core::business::connectors::{sinks as sink_connectors, sources as source_connectors};
@@ -32,9 +33,7 @@ pub fn check_with(
     render_output(&rows, &stats, opts, comps);
 
     if has_failures(&rows, comps) {
-        return Err(
-            wp_error::run_error::RunReason::from_conf("some project checks failed").to_err(),
-        );
+        return Err(wp_error::run_error::RunReason::from_conf().to_err());
     }
     Ok(())
 }
@@ -199,7 +198,7 @@ fn evaluate_target(
     }
 
     if comps.semantic_dict {
-        row.semantic_dict = match check_semantic_dict_config() {
+        row.semantic_dict = match check_semantic_dict_config(Path::new(wrs)) {
             Ok(Some(msg)) => Cell::success_with_message(msg),
             Ok(None) => Cell::success_with_message("使用内置词典".to_string()),
             Err(e) => Cell::failure(e),
@@ -215,9 +214,18 @@ fn evaluate_target(
 }
 
 /// 检查语义词典配置
-fn check_semantic_dict_config() -> Result<Option<String>, String> {
-    // 调用 wp-oml 提供的检查方法
-    oml::check_semantic_dict_config(None)
+fn check_semantic_dict_config(work_root: &Path) -> Result<Option<String>, String> {
+    let primary = work_root.join("models/knowledge/semantic_dict.toml");
+    if primary.exists() {
+        return oml::check_semantic_dict_config(Some(&primary));
+    }
+
+    let fallback = work_root.join("knowledge/semantic_dict.toml");
+    if fallback.exists() {
+        return oml::check_semantic_dict_config(Some(&fallback));
+    }
+
+    Ok(None)
 }
 
 #[derive(Default, Clone, Copy)]

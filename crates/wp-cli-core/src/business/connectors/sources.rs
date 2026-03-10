@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use orion_conf::EnvTomlLoad;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::UvsValidationFrom;
+use orion_conf::{EnvTomlLoad, ToStructError};
+use orion_error::UvsFrom;
 use orion_variate::{EnvDict, EnvEvalable};
 use wp_conf::connectors::{
     ConnectorScope, ParamMap, load_connector_defs_from_dir, merge_params, param_map_to_table,
@@ -64,10 +64,12 @@ pub fn list_connectors(
 ) -> OrionConfResult<Vec<ConnectorListRow>> {
     let wpsrc_path = resolve_wpsrc_path(work_root, eng_conf)?;
     let conn_base = find_connectors_dir(&wpsrc_path).ok_or_else(|| {
-        ConfIOReason::from_validation(format!(
-            "connectors/source.d not found (start from: {})",
-            wpsrc_path.display()
-        ))
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "connectors/source.d not found (start from: {})",
+                wpsrc_path.display()
+            ))
     })?;
     let conn_map = load_connectors_map(&conn_base, dict)?;
     let wp_sources = WpSourcesConfig::env_load_toml(&wpsrc_path, dict)?;
@@ -101,17 +103,21 @@ pub fn route_table(
 ) -> OrionConfResult<Vec<RouteRow>> {
     let wpsrc_path = resolve_wpsrc_path(work_root, eng_conf)?;
     let conn_base = find_connectors_dir(&wpsrc_path).ok_or_else(|| {
-        ConfIOReason::from_validation(format!(
-            "connectors/source.d not found (start from: {})",
-            wpsrc_path.display()
-        ))
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "connectors/source.d not found (start from: {})",
+                wpsrc_path.display()
+            ))
     })?;
     let conn_map = load_connectors_map(&conn_base, dict)?;
     let wrapper = WpSourcesConfig::env_load_toml(&wpsrc_path, dict)?.env_eval(dict);
     let mut rows: Vec<RouteRow> = Vec::new();
     for src in wrapper.sources.into_iter() {
         let conn = conn_map.get(&src.connect).ok_or_else(|| {
-            ConfIOReason::from_validation(format!("connector not found: {}", src.connect))
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("connector not found: {}", src.connect))
         })?;
         let merged = merge_params(&conn.default_params, &src.params, &conn.allow_override)?;
         let detail = detail_of(&conn.kind, &merged);

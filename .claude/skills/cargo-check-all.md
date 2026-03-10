@@ -2,6 +2,12 @@
 
 对整个 workspace 执行完整的 Rust 代码质量检查，依次运行编译检查、clippy 静态分析和全量测试，汇总报告结果。
 
+## 自动化命令
+
+```bash
+scripts/claude-skill run cargo-check-all
+```
+
 ## 工作流程
 
 依次执行以下三个阶段，任何阶段失败时分析原因并给出修复建议：

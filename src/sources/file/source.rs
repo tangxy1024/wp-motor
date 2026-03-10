@@ -4,13 +4,13 @@ use async_trait::async_trait;
 use base64::Engine;
 use base64::engine::general_purpose;
 use bytes::Bytes;
-use orion_conf::{ErrorWith, UvsConfFrom};
+use orion_conf::{ErrorWith, UvsFrom};
 use orion_error::ToStructError;
 use std::sync::Arc;
 use wp_connector_api::{
     DataSource, SourceBatch, SourceError, SourceEvent, SourceReason, SourceResult, Tags,
 };
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 #[derive(Debug, Clone)]
 pub enum FileEncoding {
@@ -46,9 +46,7 @@ impl FileSource {
         use std::path::Path;
         let file_path = Path::new(path);
         if !file_path.exists() {
-            return Err(
-                SourceReason::from_conf(format!(" {} not exists", file_path.display())).to_err(),
-            );
+            return Err(SourceReason::from_conf().to_err());
         }
         let mut file = tokio::fs::File::open(file_path)
             .await

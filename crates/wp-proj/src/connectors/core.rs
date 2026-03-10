@@ -7,7 +7,7 @@ use crate::connectors::{
 };
 use crate::traits::Component;
 use crate::types::CheckStatus;
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 
 use super::paths::ConnectorsPaths;
@@ -61,12 +61,7 @@ impl Connectors {
             println!("✓ Connectors validation passed");
             Ok(CheckStatus::Suc)
         } else {
-            Err(RunReason::from_conf(format!(
-                "Connectors lint failed: {} error(s)\n{}",
-                errors.len(),
-                errors.join("\n")
-            ))
-            .to_err())
+            Err(RunReason::from_conf().to_err())
         }
     }
 

@@ -1,4 +1,4 @@
-use orion_error::{ContextRecord, ErrorOwe, ErrorWith, WithContext};
+use orion_error::{ContextRecord, ErrorOweBase, ErrorWith, WithContext};
 
 use crate::eval::value::parse_def::{Hold, ParserHold};
 use crate::eval::value::parser::base::digit::{DigitP, FloatP};

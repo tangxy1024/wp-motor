@@ -5,7 +5,7 @@ use crate::facade::config::{load_warp_engine_confs, stat_reqs_from};
 use crate::resources::ResManager;
 use crate::runtime::sink::infrastructure::InfraSinkService;
 use orion_error::ErrorOwe;
-use orion_error::UvsLogicFrom;
+use orion_error::UvsFrom;
 use orion_variate::EnvDict;
 use wp_conf::utils::save_data;
 use wp_error::RunReason;
@@ -55,7 +55,7 @@ async fn test_res() -> RunResult<()> {
         res_center
             .wpl_index()
             .as_ref()
-            .ok_or(RunReason::from_logic("not init  wpl index".to_string()))?
+            .ok_or(RunReason::from_logic())?
     );
 
     //rule_mdl_relation
@@ -66,7 +66,7 @@ async fn test_res() -> RunResult<()> {
         res_center
             .wpl_index()
             .as_ref()
-            .ok_or(RunReason::from_logic("not init  wpl index"))?
+            .ok_or(RunReason::from_logic())?
             .rule_key()
             .len(),
         3

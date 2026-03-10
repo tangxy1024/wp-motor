@@ -1,11 +1,11 @@
 use crate::ast::AnnFun;
 use crate::{WparseError, WparseReason};
-use orion_error::{ToStructError, UvsDataFrom};
+use orion_error::{ToStructError, UvsFrom};
 use smol_str::SmolStr;
 use std::collections::BTreeMap;
 use wp_connector_api::SourceEvent;
 use wp_model_core::model::{DataField, DataRecord};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 pub trait AnnotationFunc {
     fn proc(&self, src: &SourceEvent, data: &mut DataRecord) -> Result<(), WparseError>;
@@ -50,11 +50,9 @@ impl AnnotationFunc for RawCopy {
                     data.append(DataField::from_chars(self.raw_key.clone(), str.to_string()));
                 }
                 Err(e) => {
-                    return Err(WparseReason::from_data(
-                        format!("[u8] to string error :{}", e),
-                        None,
-                    )
-                    .to_err());
+                    return Err(WparseReason::from_data()
+                        .to_err()
+                        .with_detail(format!("[u8] to string error :{}", e)));
                 }
             },
             RawData::ArcBytes(raw) => match std::str::from_utf8(raw) {
@@ -62,11 +60,9 @@ impl AnnotationFunc for RawCopy {
                     data.append(DataField::from_chars(self.raw_key.clone(), str.to_string()));
                 }
                 Err(e) => {
-                    return Err(WparseReason::from_data(
-                        format!("ArcBytes to string error :{}", e),
-                        None,
-                    )
-                    .to_err());
+                    return Err(WparseReason::from_data()
+                        .to_err()
+                        .with_detail(format!("ArcBytes to string error :{}", e)));
                 }
             },
         }
@@ -123,7 +119,7 @@ mod tests {
     use std::collections::BTreeMap;
     use wp_connector_api::{SourceEvent, Tags};
     use wp_model_core::model::DataRecord;
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     #[test]
     fn test_tag_fun() {

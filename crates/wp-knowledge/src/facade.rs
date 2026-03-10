@@ -13,7 +13,7 @@ use crate::mem::RowData;
 use crate::mem::memdb::MemDB;
 use crate::mem::thread_clone::ThreadClonedMDB;
 //use anyhow::{anyhow, Result};
-use orion_error::{ErrorWith, ToStructError, UvsLogicFrom};
+use orion_error::{ErrorWith, ToStructError, UvsFrom};
 use rusqlite::ToSql;
 use rusqlite::{Connection, OpenFlags};
 
@@ -90,15 +90,19 @@ pub fn init_mem_provider(memdb: MemDB) -> KnowledgeResult<()> {
 }
 
 fn set_provider(p: Arc<dyn QueryFacade>) -> KnowledgeResult<()> {
-    PROVIDER
-        .set(p)
-        .map_err(|_| KnowledgeReason::from_logic("knowledge provider already initialized").to_err())
+    PROVIDER.set(p).map_err(|_| {
+        KnowledgeReason::from_logic()
+            .to_err()
+            .with_detail("knowledge provider already initialized")
+    })
 }
 
 fn get_provider() -> KnowledgeResult<&'static Arc<dyn QueryFacade>> {
-    PROVIDER
-        .get()
-        .ok_or_else(|| KnowledgeReason::from_logic("knowledge provider not initialized").to_err())
+    PROVIDER.get().ok_or_else(|| {
+        KnowledgeReason::from_logic()
+            .to_err()
+            .with_detail("knowledge provider not initialized")
+    })
 }
 
 pub fn query(sql: &str) -> KnowledgeResult<Vec<RowData>> {
@@ -123,9 +127,10 @@ pub fn query_cipher(table: &str) -> KnowledgeResult<Vec<String>> {
     if let Some(wl) = TABLE_WHITELIST.get()
         && !wl.contains(table)
     {
-        return KnowledgeReason::from_logic("table not allowed by knowdb whitelist")
-            .err_result()
-            .with(("table", table));
+        return Err(KnowledgeReason::from_logic()
+            .to_err()
+            .with_detail("table not allowed by knowdb whitelist")
+            .with(("table", table)));
     }
     get_provider()?.query_cipher(table)
 }

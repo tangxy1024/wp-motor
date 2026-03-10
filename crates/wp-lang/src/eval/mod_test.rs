@@ -3,7 +3,7 @@ mod tests {
     use crate::eval::runtime::vm_unit::WplEvaluator;
     use crate::parser::parse_code::wpl_express;
     use orion_error::TestAssert;
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
     use wp_parser::Parser;
 
     #[test]

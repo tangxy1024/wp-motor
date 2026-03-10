@@ -5,7 +5,7 @@ use crate::core::prelude::*;
 use crate::language::ObjModel;
 use crate::parser::error::OMLCodeErrorTait;
 use crate::parser::oml_parse_raw;
-use orion_error::{ContextRecord, ErrorOwe, ErrorWith, WithContext};
+use orion_error::{ContextRecord, ErrorOweBase, ErrorWith, WithContext};
 use wp_data_model::cache::FieldQueryCache;
 use wp_error::parse_error::{OMLCodeError, OMLCodeReason, OMLCodeResult};
 use wp_model_core::model::DataRecord;

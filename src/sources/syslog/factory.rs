@@ -7,8 +7,8 @@ use super::config::{Protocol, SyslogSourceSpec};
 use super::tcp_source::TcpSyslogSource;
 use super::udp_source::UdpSyslogSource;
 use crate::sources::tcp::{FramingMode, TcpAcceptor, TcpSource};
-use orion_conf::UvsConfFrom;
-use orion_error::ToStructError;
+use orion_conf::{ErrorWith, UvsFrom};
+use orion_error::ErrorOweBase;
 use serde_json::json;
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
@@ -16,11 +16,11 @@ use tokio::sync::mpsc;
 use wp_conf::connectors::{ConnectorDef, ConnectorScope};
 use wp_conf::limits::tcp_reader_batch_channel_cap;
 use wp_conf_base::ConfParser;
+use wp_connector_api::ParamMap;
 use wp_connector_api::{
     AcceptorHandle, SourceBuildCtx, SourceDefProvider, SourceFactory, SourceHandle, SourceMeta,
-    SourceResult, SourceSvcIns, Tags,
+    SourceReason, SourceResult, SourceSvcIns, Tags,
 };
-use wp_connector_api::{ParamMap, SourceReason};
 
 /// Syslog source factory that creates both UDP and TCP syslog sources
 pub struct SyslogSourceFactory {}
@@ -130,8 +130,10 @@ impl SourceFactory for SyslogSourceFactory {
             Ok(svc)
         };
 
-        fut.await
-            .map_err(|e: anyhow::Error| SourceReason::from_conf(e.to_string()).to_err())
+        let fut: anyhow::Result<SourceSvcIns> = fut.await;
+        fut.owe(SourceReason::from_conf())
+            .with(spec.name.as_str())
+            .want("build syslog source service")
     }
 }
 

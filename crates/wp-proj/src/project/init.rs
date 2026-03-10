@@ -1,7 +1,7 @@
 use super::warp::{WarpProject, normalize_work_root};
 use crate::utils::error_handler::ErrorHandler;
 use orion_conf::{EnvTomlLoad, ErrorOwe, ToStructError, TomlIO};
-use orion_error::{UvsConfFrom, UvsValidationFrom};
+use orion_error::UvsFrom;
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -60,7 +60,11 @@ impl FromStr for PrjScope {
             "conf" => Self::Conf,
             "topology" => Self::Topology,
             "data" => Self::Data,
-            _ => return RunReason::from_validation("not init mode").err_result(),
+            _ => {
+                return Err(RunReason::from_validation()
+                    .to_err()
+                    .with_detail("not init mode"));
+            }
         };
         Ok(mode)
     }
@@ -237,11 +241,7 @@ impl WarpProject {
         let abs_root = normalize_work_root(work_root);
         let engine_config_path = abs_root.join(CONF_WPARSE_FILE);
         if !engine_config_path.exists() {
-            return RunReason::from_conf(format!(
-                "wparse config missing: {}",
-                engine_config_path.display()
-            ))
-            .err_result();
+            return RunReason::from_conf().err_result();
         }
         let conf = EngineConfig::env_load_toml(&engine_config_path, dict)
             .owe_conf()?
@@ -254,11 +254,7 @@ impl WarpProject {
         let abs_root = normalize_work_root(work_root);
         let wpgen_config_path = abs_root.join(CONF_WPGEN_FILE);
         if !wpgen_config_path.exists() {
-            return RunReason::from_conf(format!(
-                "wpgen config missing: {}",
-                wpgen_config_path.display()
-            ))
-            .err_result();
+            return RunReason::from_conf().err_result();
         }
         WpGenConfig::env_load_toml(&wpgen_config_path, dict).owe_conf()?;
         Ok(())

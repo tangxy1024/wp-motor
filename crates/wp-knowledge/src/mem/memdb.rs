@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use orion_error::ErrorOwe;
 use orion_error::ErrorWith;
 use orion_error::ToStructError;
-use orion_error::UvsConfFrom;
+use orion_error::UvsFrom;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use rusqlite::Params;
@@ -281,10 +281,11 @@ impl MemDB {
         if count >= scope.0 {
             Ok(count)
         } else {
-            KnowledgeReason::from_conf("table data less")
-                .err_result()
+            Err(KnowledgeReason::from_conf()
+                .to_err()
+                .with_detail("table data less")
                 .with(("table", table))
-                .with(("count", count.to_string()))
+                .with(("count", count.to_string())))
 
             /*
             Err(anyhow!(

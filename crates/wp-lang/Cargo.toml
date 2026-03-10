@@ -22,7 +22,7 @@ wp-connector-api= { workspace=true }
 wp-error= { workspace = true }
 wp-log = { workspace = true }
 wp-specs = { workspace = true }
-#orion-error = "0.0.7"
+# wp-lang needs orion-error 0.6 APIs for wp-parse-api 0.8 reason constructors.
 orion-error = { workspace = true }
 wp_parser = { package = "wp-parser", path = "../wp-parser", default-features = false }
 derive-getters = { workspace = true }

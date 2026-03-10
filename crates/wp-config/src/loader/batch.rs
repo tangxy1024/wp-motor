@@ -9,7 +9,7 @@
 
 use super::traits::ConfigLoader;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 
@@ -39,22 +39,30 @@ where
     T: ConfigLoader + serde::Serialize,
 {
     if !dir.exists() {
-        return Err(ConfIOReason::from_validation(format!("目录不存在: {:?}", dir)).to_err());
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!("目录不存在: {:?}", dir)));
     }
 
     if !dir.is_dir() {
-        return Err(ConfIOReason::from_validation(format!("路径不是目录: {:?}", dir)).to_err());
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!("路径不是目录: {:?}", dir)));
     }
 
     let mut configs = Vec::new();
 
     let entries = std::fs::read_dir(dir).map_err(|e| {
-        ConfIOReason::from_validation(format!("无法读取目录 {:?}: {}", dir, e)).to_err()
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!("无法读取目录 {:?}: {}", dir, e))
     })?;
 
     for entry in entries {
         let entry: std::fs::DirEntry = entry.map_err(|e| {
-            ConfIOReason::from_validation(format!("读取目录项失败: {}", e)).to_err()
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("读取目录项失败: {}", e))
         })?;
 
         let path = entry.path();

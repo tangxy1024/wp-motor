@@ -1,4 +1,5 @@
-use orion_error::{ToStructError, UvsConfFrom};
+use orion_conf::ErrorWith;
+use orion_error::{ErrorOwe, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -93,9 +94,11 @@ rule = "/example/*"
         }
         let root_str = oml_root
             .to_str()
-            .ok_or_else(|| RunReason::from_conf("OML文件路径无效").to_err())?;
+            .ok_or_else(|| RunReason::from_conf().to_err())?;
         let oml_files = find_conf_files(root_str, WPARSE_OML_FILE)
-            .map_err(|e| RunReason::from_conf(format!("OML 查找失败: {}", e)).to_err())?;
+            .owe_conf()
+            .with(root_str)
+            .want("find oml files")?;
         if oml_files.is_empty() {
             return Ok(CheckStatus::Miss);
         }
@@ -104,7 +107,9 @@ rule = "/example/*"
         }
 
         fetch_oml_data(root_str, WPARSE_OML_FILE)
-            .map_err(|e| RunReason::from_conf(format!("parse oml failed: {}", e)).to_err())?;
+            .owe_rule()
+            .with(root_str)
+            .want("parse oml models")?;
         Ok(CheckStatus::Suc)
     }
 }

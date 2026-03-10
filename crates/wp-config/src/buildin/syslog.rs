@@ -1,7 +1,7 @@
 use crate::structure::Protocol;
 use educe::Educe;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::Path;
 
@@ -80,18 +80,24 @@ impl SyslogSourceConf {
 impl crate::structure::Validate for SyslogSourceConf {
     fn validate(&self) -> OrionConfResult<()> {
         if self.addr.trim().is_empty() {
-            return ConfIOReason::from_validation("syslog.addr must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("syslog.addr must not be empty"));
         }
         if self.port == 0 {
-            return ConfIOReason::from_validation("syslog.port must be in 1..=65535").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("syslog.port must be in 1..=65535"));
         }
         if matches!(self.protocol, Protocol::TCP) && self.tcp_recv_bytes == 0 {
-            return ConfIOReason::from_validation("syslog.tcp_recv_bytes must be > 0 for TCP")
-                .err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("syslog.tcp_recv_bytes must be > 0 for TCP"));
         }
         if matches!(self.protocol, Protocol::UDP) && self.udp_recv_buffer == 0 {
-            return ConfIOReason::from_validation("syslog.udp_recv_buffer must be > 0 for UDP")
-                .err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("syslog.udp_recv_buffer must be > 0 for UDP"));
         }
         Ok(())
     }
@@ -107,8 +113,11 @@ impl crate::loader::traits::ConfigLoader for SyslogSinkConf {
     }
 
     fn load_from_str(content: &str, _base: &Path, _dict: &EnvDict) -> OrionConfResult<Self> {
-        let conf: SyslogSinkConf = toml::from_str(content)
-            .map_err(|e| ConfIOReason::from_validation(format!("TOML 解析失败: {}", e)).to_err())?;
+        let conf: SyslogSinkConf = toml::from_str(content).map_err(|e| {
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("TOML 解析失败: {}", e))
+        })?;
 
         Ok(conf)
     }
@@ -122,8 +131,11 @@ impl crate::loader::traits::ConfigLoader for SyslogSourceConf {
     }
 
     fn load_from_str(content: &str, _base: &Path, _dict: &EnvDict) -> OrionConfResult<Self> {
-        let conf: SyslogSourceConf = toml::from_str(content)
-            .map_err(|e| ConfIOReason::from_validation(format!("TOML 解析失败: {}", e)).to_err())?;
+        let conf: SyslogSourceConf = toml::from_str(content).map_err(|e| {
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("TOML 解析失败: {}", e))
+        })?;
 
         Ok(conf)
     }

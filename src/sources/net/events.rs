@@ -2,7 +2,7 @@ use crate::sources::event_id::next_event_id;
 use bytes::Bytes;
 use std::sync::Arc;
 use wp_connector_api::{SourceEvent, Tags};
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 /// 基础事件构建（附加 access_ip、ups_ip、复制 tags 为 Tags）
 pub fn build_base_event(key: &str, tags: &Tags, client_ip: &str, payload: Bytes) -> SourceEvent {

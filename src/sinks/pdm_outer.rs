@@ -1,6 +1,6 @@
 use crate::sinks::{prelude::*, utils::formatter::gen_fmt_dat};
 use wp_model_core::model::fmt_def::TextFmt;
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 use crate::types::AnyResult;
 

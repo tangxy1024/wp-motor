@@ -11,7 +11,7 @@
 //! ```
 
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::Path;
 
@@ -57,13 +57,14 @@ pub trait ConfigLoader: Sized {
         Self: serde::Serialize,
     {
         let content = std::fs::read_to_string(path).map_err(|e| {
-            ConfIOReason::from_validation(format!(
-                "无法读取 {} 配置文件 {:?}: {}",
-                Self::config_type_name(),
-                path,
-                e
-            ))
-            .to_err()
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!(
+                    "无法读取 {} 配置文件 {:?}: {}",
+                    Self::config_type_name(),
+                    path,
+                    e
+                ))
         })?;
 
         let base = path.parent().unwrap_or_else(|| Path::new("."));
@@ -151,7 +152,9 @@ mod tests {
 
         fn validate(&self) -> OrionConfResult<()> {
             if self.value.is_empty() {
-                return Err(ConfIOReason::from_validation("value 不能为空").to_err());
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail("value 不能为空"));
             }
             Ok(())
         }
@@ -185,7 +188,9 @@ mod tests {
             }
 
             fn validate(&self) -> OrionConfResult<()> {
-                Err(ConfIOReason::from_validation("验证失败").to_err())
+                Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail("验证失败"))
             }
         }
 

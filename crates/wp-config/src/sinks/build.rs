@@ -4,7 +4,7 @@ use crate::sinks::io::business_dir;
 use crate::sinks::{load_connectors_for, load_route_files_from, load_sink_defaults};
 use crate::structure::{SinkInstanceConf, SinkRouteConf, Validate as ConfValidate};
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -127,37 +127,43 @@ fn merge_params_with_allowlist(
     let mut m = base.clone();
     for (k, v) in overrides.iter() {
         if is_nested_field_blacklisted(k) {
-            return ConfIOReason::from_validation(format!(
-                "invalid nested table '{}' in params; please flatten and set keys [{}] directly under 'params'. Example: params = {{ {} }} or [sink_group.sinks.params] ... (group: {}, sink: {}, connector: {}, file: {})",
-                k,
-                allow.join(", "),
-                allow
-                    .iter()
-                    .map(|kk| format!("{}=...", kk))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                group_name,
-                sink_name,
-                conn_id,
-                origin
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| "-".to_string())
-            ))
-            .err_result();
+            return Err(
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "invalid nested table '{}' in params; please flatten and set keys [{}] directly under 'params'. Example: params = {{ {} }} or [sink_group.sinks.params] ... (group: {}, sink: {}, connector: {}, file: {})",
+                        k,
+                        allow.join(", "),
+                        allow
+                            .iter()
+                            .map(|kk| format!("{}=...", kk))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        group_name,
+                        sink_name,
+                        conn_id,
+                        origin
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|| "-".to_string())
+                    )),
+            );
         }
         if !allow.iter().any(|x| x == k) {
-            return ConfIOReason::from_validation(format!(
-                "override '{}' not allowed; whitelist: [{}] (group: {}, sink: {}, connector: {}, file: {})",
-                k,
-                allow.join(", "),
-                group_name,
-                sink_name,
-                conn_id,
-                origin
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| "-".to_string())
-            ))
-            .err_result();
+            return Err(
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "override '{}' not allowed; whitelist: [{}] (group: {}, sink: {}, connector: {}, file: {})",
+                        k,
+                        allow.join(", "),
+                        group_name,
+                        sink_name,
+                        conn_id,
+                        origin
+                            .map(|p| p.display().to_string())
+                            .unwrap_or_else(|| "-".to_string())
+                    )),
+            );
         }
         m.insert(k.clone(), v.clone());
     }
@@ -229,6 +235,12 @@ fn apply_group_metadata(
     if let Some(gt) = rf.sink_group.tags.as_ref() {
         g.tags = gt.clone();
     }
+    if let Some(timeout_ms) = rf.sink_group.batch_timeout_ms {
+        g.batch_timeout_ms = timeout_ms;
+    }
+    if let Some(size) = rf.sink_group.batch_size {
+        g.batch_size = size;
+    }
 }
 
 /// 从单个 RouteFile 构建标准输出 SinkRouteConf（统一事实源）
@@ -274,11 +286,9 @@ pub fn build_route_conf_from_with(
 
     // 3) 组装 FlexiGroupConf（空列表兜底）
     if sinks.is_empty() {
-        return ConfIOReason::from_validation(format!(
-            "group '{}' has no sinks",
-            rf.sink_group.name
-        ))
-        .err_result();
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!("group '{}' has no sinks", rf.sink_group.name)));
     }
     let mut group = FlexGroup::build_conf(&rf.sink_group.name, sinks);
     group.oml = extend_matches(oml_vec);
@@ -299,12 +309,13 @@ fn resolve_connector<'a>(
     s: &RouteSink,
 ) -> OrionConfResult<&'a ConnectorRec> {
     conn_map.get(s.use_id()).ok_or_else(|| {
-        ConfIOReason::from_validation(format!(
-            "connector '{}' not found (group '{}')",
-            s.use_id(),
-            rf.sink_group.name
-        ))
-        .to_err()
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "connector '{}' not found (group '{}')",
+                s.use_id(),
+                rf.sink_group.name
+            ))
     })
 }
 
@@ -314,11 +325,12 @@ fn ensure_unique_name(
     group: &str,
 ) -> OrionConfResult<()> {
     if !guard.insert(name.to_string()) {
-        return ConfIOReason::from_validation(format!(
-            "duplicate sink name '{}' in group '{}'",
-            name, group
-        ))
-        .err_result();
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "duplicate sink name '{}' in group '{}'",
+                name, group
+            )));
     }
     Ok(())
 }
@@ -329,18 +341,19 @@ fn validate_sink_instance(
     conn: &ConnectorRec,
 ) -> OrionConfResult<()> {
     if let Err(e) = sink.validate() {
-        return ConfIOReason::from_validation(format!(
-            "sink validate error: {:?} (group: {}, sink: {}, connector: {}, file: {})",
-            e,
-            rf.sink_group.name,
-            sink.name(),
-            conn.id,
-            rf.origin
-                .as_ref()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|| "-".to_string())
-        ))
-        .err_result();
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "sink validate error: {:?} (group: {}, sink: {}, connector: {}, file: {})",
+                e,
+                rf.sink_group.name,
+                sink.name(),
+                conn.id,
+                rf.origin
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "-".to_string())
+            )));
     }
     Ok(())
 }
@@ -360,18 +373,19 @@ fn plugin_validate_with(
             conn.id.clone(),
         );
         if let Err(e) = f.validate_spec(&resolved) {
-            return ConfIOReason::from_validation(format!(
-                "plugin validate failed: {} (group: {}, sink: {}, connector: {}, file: {})",
-                e,
-                rf.sink_group.name,
-                sink.name(),
-                conn.id,
-                rf.origin
-                    .as_ref()
-                    .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| "-".to_string())
-            ))
-            .err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!(
+                    "plugin validate failed: {} (group: {}, sink: {}, connector: {}, file: {})",
+                    e,
+                    rf.sink_group.name,
+                    sink.name(),
+                    conn.id,
+                    rf.origin
+                        .as_ref()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|| "-".to_string())
+                )));
         }
     }
     Ok(())
@@ -415,11 +429,14 @@ pub fn load_infra_route_confs(
         // Infra 组不支持并行与文件分片：
         // - 禁止 [sink_group].parallel（基础组只有单消费协程，并行无效，易误导）
         if rf.sink_group.parallel.is_some() {
-            return ConfIOReason::from_validation(format!(
-                "infra group '{}' does not support [sink_group].parallel; remove this field and use business.d parallel for throughput",
-                rf.sink_group.name
-            ))
-            .err_result();
+            return Err(
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "infra group '{}' does not support [sink_group].parallel; remove this field and use business.d parallel for throughput",
+                        rf.sink_group.name
+                    )),
+            );
         }
         let conf = build_route_conf_from(rf, defaults.as_ref(), &conn_map)?;
         out.push(conf);
@@ -448,6 +465,8 @@ mod tests {
                 expect: None,
                 sinks: vec![],
                 parallel: None,
+                batch_timeout_ms: None,
+                batch_size: None,
             },
             origin: None,
         };
@@ -473,6 +492,8 @@ mod tests {
                 expect: None,
                 sinks: vec![],
                 parallel: None,
+                batch_timeout_ms: None,
+                batch_size: None,
             },
             origin: None,
         };
@@ -500,6 +521,8 @@ mod tests {
                 expect: None,
                 sinks: vec![],
                 parallel: None,
+                batch_timeout_ms: None,
+                batch_size: None,
             },
             origin: None,
         };
@@ -526,6 +549,8 @@ mod tests {
                 expect: None,
                 sinks: vec![],
                 parallel: None,
+                batch_timeout_ms: None,
+                batch_size: None,
             },
             origin: None,
         };

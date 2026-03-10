@@ -110,7 +110,7 @@ mod tests {
     use tokio::sync::mpsc;
     use tokio::sync::mpsc::error::TryRecvError;
     use wp_connector_api::{SourceBatch, SourceEvent, Tags};
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     const TEST_CMD_BUFFER_CAP: usize = 4;
     const TEST_PARSE_CHANNEL_CAP: usize = 4;

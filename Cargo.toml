@@ -51,12 +51,13 @@ members = [
 
     # --- CLI & Tools ---
     "crates/wp-cli-core", # CLI shared infrastructure
+    "crates/wp-core-connectors", # Connector registry core
     "crates/wp-proj", # Project management utilities
     "crates/wp-stats", # Statistics collection
 ]
 
 [workspace.package]
-version = "1.17.2"
+version = "1.18.2"
 edition = "2024"
 license = "Apache-2.0"
 
@@ -175,6 +176,7 @@ wp_stat = { package = "wp-stats", path = "crates/wp-stats" }
 
 # --- Internal: CLI Core ---
 wp_cli_core = { package = "wp-cli-core", path = "crates/wp-cli-core" }
+wp_core_connectors = { package = "wp-core-connectors", path = "crates/wp-core-connectors" }
 
 # --- External: API Layer ---
 wp-connector-api = { workspace = true }
@@ -240,6 +242,11 @@ name = "oml_proc_batch_nginx"
 harness = false
 required-features = ["perf-ci"]
 
+[[bench]]
+name = "sink_batch_pending_blackhole"
+harness = false
+required-features = ["perf-ci"]
+
 # ============================================================================
 # Metadata
 # ============================================================================
@@ -259,14 +266,14 @@ smol_str = { version = "0.3", features = ["serde"] }
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
-toml = "0.9"
+toml = "1.0"
 
 # --- Error Handling & Logging ---
 anyhow = "1.0"
 thiserror = "2.0"
 log = "0.4"
 env_logger = "0.11"
-orion-error = "0.5"
+orion-error = "0.6"
 
 # --- Parsing & Text ---
 winnow = "0.7"
@@ -357,9 +364,9 @@ similar = "2.7"
 rust-crypto = "0.2"
 
 # --- Configuration ---
-orion_conf = { version = "0.4", features = ["yaml", "toml"] }
-orion-sec = "0.3"
-orion-variate = "0.10"
+orion_conf = { version = "0.5", features = ["yaml", "toml"] }
+orion-sec = "0.4"
+orion-variate = "0.11"
 
 # --- Testing ---
 criterion = "0.8"
@@ -385,22 +392,23 @@ wp_oml = { package = "wp-oml", path = "./crates/wp-oml" }
 wp_parser = { package = "wp-parser", path = "./crates/wp-parser" }
 wp_proj = { package = "wp-proj", path = "./crates/wp-proj" }
 wp_stats = { package = "wp-stats", path = "./crates/wp-stats" }
+wp_core_connectors = { package = "wp-core-connectors", path = "./crates/wp-core-connectors" }
 
 # --- External: Arrow ---
 wp-arrow = { path = "../wp-arrow" }
 
 # --- External: Open API (Public Interfaces) ---
-wp-connector-api = "0.7"
-wp-parse-api = "0.7"
+wp-connector-api = "0.8"
+wp-parse-api = "0.8"
 wp-model-core = "0.8"
 
 # --- External: Advanced API (Enterprise Features) ---
-wp_ctrl_api = { package = "wp-ctrl-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.0.5-beta" }
-wp_enrich_api = { package = "wp-enrich-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.0.5-beta" }
+wp_ctrl_api = { package = "wp-ctrl-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.1.0" }
+wp_enrich_api = { package = "wp-enrich-api", git = "https://github.com/wp-labs/wp-advanced-api", tag = "v0.1.0" }
 
 # --- External: Infrastructure Libraries ---
-wp-log = "0.1"
-wp-error = "0.7"
-wp-specs = "0.7"
-wp-conf-base = "0.1"
+wp-log = "0.2"
+wp-error = "0.8"
+wp-specs = "0.8"
+wp-conf-base = "0.2"
 wp-data-fmt = "0.2"

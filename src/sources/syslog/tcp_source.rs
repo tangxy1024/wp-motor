@@ -12,7 +12,7 @@ use wp_connector_api::{
     CtrlRx, DataSource, EventPreHook, SourceBatch, SourceError, SourceEvent, SourceReason,
     SourceResult, Tags,
 };
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 
 use super::normalize;
 use crate::sources::syslog::constants::Message;

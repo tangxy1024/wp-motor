@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use wp_parse_api::{RawData, WparseResult};
+use wp_model_core::raw::RawData;
+use wp_parse_api::WparseResult;
 
 /// Trait for pipeline data processing operations.
 ///

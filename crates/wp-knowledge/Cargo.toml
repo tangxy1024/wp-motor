@@ -12,7 +12,8 @@ name = "wp_knowledge"
 
 [dependencies]
 orion_overload = { path = "../orion_overload" }
-orion-error= { workspace = true }
+# Keep wp-knowledge on the same error stack as wp-error/orion_conf (0.5.x).
+orion-error = { workspace = true }
 wp-error = { workspace = true }
 orion-variate = { workspace = true }
 orion_conf = { workspace = true }

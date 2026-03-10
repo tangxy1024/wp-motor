@@ -1,6 +1,7 @@
 use crate::facade::test_helpers::SinkTerminal;
 use crate::sinks::ProcMeta;
 
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use crate::runtime::actor::constants::ACTOR_IDLE_TICK_MS;
@@ -12,10 +13,16 @@ use wp_stat::StatReq;
 use wp_stat::TimedStat;
 
 use crate::runtime::actor::command::{CmdSubscriber, TaskController};
+use crate::stat::metric_collect::MetricCollectors;
+use crate::stat::runtime_counters;
 use crate::stat::runtime_metric::RuntimeMetrics;
 use crate::stat::{MonRecv, MonSend};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 use wp_log::info_ctrl;
+use wp_stat::StatStage;
+
+const MONITOR_CHANNEL_CAP: usize = 4096;
+const ENABLE_BACKLOG_JUDGEMENT: bool = false;
 
 pub struct ActorMonitor {
     mon_r: MonRecv,
@@ -35,7 +42,7 @@ impl ActorMonitor {
         stat_sec: usize,
         //actions: Vec<Action>,
     ) -> Self {
-        let (mon_s, mon_r) = tokio::sync::mpsc::channel::<ReportVariant>(100000);
+        let (mon_s, mon_r) = tokio::sync::mpsc::channel::<ReportVariant>(MONITOR_CHANNEL_CAP);
         Self {
             mon_r,
             mon_s,
@@ -57,7 +64,13 @@ impl ActorMonitor {
             self.stat_print
         );
         let mut wparse_stat = RuntimeMetrics::default();
+        let sink_reqs: Vec<StatReq> = reqs
+            .iter()
+            .filter(|r| r.stage == StatStage::Sink)
+            .cloned()
+            .collect();
         wparse_stat.registry(reqs);
+        let mut runtime_stat = MetricCollectors::new("__runtime".to_string(), sink_reqs);
         let mut time_stat = TimedStat::new();
         let mut run_ctrl = TaskController::new("monitor", self.cmd_r.clone(), None);
         info_ctrl!(
@@ -93,6 +106,29 @@ impl ActorMonitor {
             stat_check_ticks = 0;
 
             if time_stat.over_reset_timed(self.stat_sec) {
+                let snapshot = runtime_counters::take_snapshot();
+                if !snapshot.is_empty() {
+                    runtime_stat.record_task_batch(
+                        "__runtime/monitor_send_drop_full",
+                        u64_to_usize(snapshot.monitor_send_drop_full),
+                    );
+                    runtime_stat.record_task_batch(
+                        "__runtime/monitor_send_drop_closed",
+                        u64_to_usize(snapshot.monitor_send_drop_closed),
+                    );
+                    runtime_stat.record_task_batch(
+                        "__runtime/sink_channel_full",
+                        u64_to_usize(snapshot.sink_channel_full),
+                    );
+                    runtime_stat.record_task_batch(
+                        "__runtime/sink_channel_closed",
+                        u64_to_usize(snapshot.sink_channel_closed),
+                    );
+                    merge_collectors_to_slice(&mut runtime_stat, &mut wparse_stat.slice);
+                }
+                if ENABLE_BACKLOG_JUDGEMENT {
+                    emit_backlog_judgement(&wparse_stat.slice, snapshot, self.stat_print);
+                }
                 // 打印一次进程内存（RSS）快照，辅助定位“背压导致的堆积”
                 if let Some(pid) = cur_pid {
                     // 刷新进程快照，然后读取当前进程 RSS
@@ -125,6 +161,29 @@ impl ActorMonitor {
         while let Ok(x) = self.mon_r.try_recv() {
             wparse_stat.slice.merge_slice(x);
         }
+        let snapshot = runtime_counters::take_snapshot();
+        if !snapshot.is_empty() {
+            runtime_stat.record_task_batch(
+                "__runtime/monitor_send_drop_full",
+                u64_to_usize(snapshot.monitor_send_drop_full),
+            );
+            runtime_stat.record_task_batch(
+                "__runtime/monitor_send_drop_closed",
+                u64_to_usize(snapshot.monitor_send_drop_closed),
+            );
+            runtime_stat.record_task_batch(
+                "__runtime/sink_channel_full",
+                u64_to_usize(snapshot.sink_channel_full),
+            );
+            runtime_stat.record_task_batch(
+                "__runtime/sink_channel_closed",
+                u64_to_usize(snapshot.sink_channel_closed),
+            );
+            merge_collectors_to_slice(&mut runtime_stat, &mut wparse_stat.slice);
+        }
+        if ENABLE_BACKLOG_JUDGEMENT {
+            emit_backlog_judgement(&wparse_stat.slice, snapshot, self.stat_print);
+        }
         // 将尾部切片并入总计后再打印
         wparse_stat.sum_up();
         if self.stat_print {
@@ -140,5 +199,128 @@ impl ActorMonitor {
         }
         info_ctrl!("monitor proc end (total_events={})", run_ctrl.total_count());
         Ok(())
+    }
+}
+
+fn u64_to_usize(v: u64) -> usize {
+    v.min(usize::MAX as u64) as usize
+}
+
+fn merge_collectors_to_slice(
+    collectors: &mut MetricCollectors,
+    slice: &mut crate::stat::metric_set::MetricSet,
+) {
+    for collector in collectors.items.iter_mut() {
+        slice.merge_slice(ReportVariant::Stat(collector.collect_stat()));
+    }
+}
+
+#[derive(Debug)]
+struct BacklogRow {
+    group: String,
+    recv: u64,
+    out: u64,
+    backlog: i64,
+}
+
+fn emit_backlog_judgement(
+    set: &crate::stat::metric_set::MetricSet,
+    rt: runtime_counters::RuntimeCounterSnapshot,
+    verbose: bool,
+) {
+    let mut recv_by_group: BTreeMap<String, u64> = BTreeMap::new();
+    let mut out_by_group: BTreeMap<String, u64> = BTreeMap::new();
+
+    for report in set.units() {
+        if report.get_req().stage != StatStage::Sink {
+            continue;
+        }
+        let target = report.target_display();
+        if target.starts_with("__runtime") {
+            continue;
+        }
+        let amount: u64 = report
+            .get_data()
+            .iter()
+            .map(|r| r.stat.success as u64)
+            .sum();
+        if amount == 0 {
+            continue;
+        }
+
+        if target.ends_with("@recv") {
+            let group = if let Some((group, _)) = target.split_once('#') {
+                group
+            } else {
+                target.trim_end_matches("@recv")
+            };
+            *recv_by_group.entry(group.to_string()).or_insert(0) += amount;
+            continue;
+        }
+        if let Some((group, _)) = target.split_once('/') {
+            *out_by_group.entry(group.to_string()).or_insert(0) += amount;
+        }
+    }
+
+    let mut result = Vec::new();
+    for (group, recv) in &recv_by_group {
+        let out = out_by_group.get(group).copied().unwrap_or(0);
+        result.push(BacklogRow {
+            group: group.clone(),
+            recv: *recv,
+            out,
+            backlog: (*recv as i64) - (out as i64),
+        });
+    }
+    if result.is_empty() {
+        return;
+    }
+    result.sort_by(|a, b| {
+        b.backlog
+            .cmp(&a.backlog)
+            .then_with(|| a.group.cmp(&b.group))
+    });
+
+    let has_runtime_bp = rt.monitor_send_drop_full > 0
+        || rt.monitor_send_drop_closed > 0
+        || rt.sink_channel_full > 0;
+    let has_backlog = result.iter().any(|row| row.backlog > 0);
+    if !verbose && !has_runtime_bp && !has_backlog {
+        return;
+    }
+    info_ctrl!(
+        "backlog/runtime: monitor_drop_full={} monitor_drop_closed={} sink_ch_full={} sink_ch_closed={}",
+        rt.monitor_send_drop_full,
+        rt.monitor_send_drop_closed,
+        rt.sink_channel_full,
+        rt.sink_channel_closed
+    );
+    for row in result {
+        let status = if row.backlog <= 0 {
+            "OK"
+        } else if rt.sink_channel_full > 0 || rt.monitor_send_drop_full > 0 {
+            "BACKLOG+BP"
+        } else {
+            "BACKLOG"
+        };
+        if status == "OK" {
+            info_ctrl!(
+                "backlog: group={} recv={} out={} delta={} status={}",
+                row.group,
+                row.recv,
+                row.out,
+                row.backlog,
+                status
+            );
+        } else {
+            warn_ctrl!(
+                "backlog: group={} recv={} out={} delta={} status={}",
+                row.group,
+                row.recv,
+                row.out,
+                row.backlog,
+                status
+            );
+        }
     }
 }

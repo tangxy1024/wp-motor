@@ -19,7 +19,7 @@ use crate::runtime::actor::command::CmdSubscriber;
 
 use crate::orchestrator::config::models::StatConf;
 use crate::orchestrator::config::models::warp::stat_reqs_from;
-use crate::runtime::actor::{TaskGroup, TaskManager};
+use crate::runtime::actor::{ExitPolicyKind, TaskGroup, TaskManager, TaskRole};
 use crate::sinks::SinkRuntime;
 use crate::sinks::{SinkBackendType, SinkDatASender, SinkDataEnum, make_blackhole_sink};
 use crate::stat::MonSend;
@@ -37,7 +37,7 @@ pub async fn rule_gen_run(
     out_io: SinkBackendType,
 ) -> RunResult<()> {
     if rules.is_empty() {
-        return Err(RunReason::from_biz("gen rule is empty!").to_err());
+        return Err(RunReason::from_biz().to_err());
     }
     // 限速为全局语义：当 speed>0 时，将并发限制为 min(parallel, speed)
     let mut g = args.gen_conf.clone();
@@ -106,7 +106,7 @@ pub async fn gen_run(
     moni_group.append(tokio::spawn(async move {
         let _ = actor_mon.stat_proc(monitor_reqs).await;
     }));
-    rt_admin.append_group(moni_group);
+    rt_admin.append_group_with_role(TaskRole::Monitor, moni_group);
     info_ctrl!("start monitor coroutine");
     // Sink 组：多副本并行消费
     // 若 out_io 为 BlackHoleSink，可安全复制多份；否则退化为单副本消费（避免非法克隆真实外部连接）
@@ -175,7 +175,7 @@ pub async fn gen_run(
         // route 结束：shard_senders 在此 drop，从而关闭所有 shard 通道
         info_ctrl!("router exit");
     }));
-    rt_admin.append_group(route_group);
+    rt_admin.append_group_with_role(TaskRole::Router, route_group);
 
     let mut gen_group = TaskGroup::new("gen", ShutdownCmd::Immediate);
     // 计算每个 worker 的任务量：均分 + 余数前置分配，严格等于 total_line
@@ -218,11 +218,12 @@ pub async fn gen_run(
     }
     // 释放主发送句柄；仅保留生产者持有的克隆，便于在生产全部结束后关闭路由接收端
     drop(dat_s_main);
-    rt_admin.append_group(sink_group);
-    rt_admin.set_main(gen_group);
+    rt_admin.append_group_with_role(TaskRole::Sink, sink_group);
+    rt_admin.append_group_with_role(TaskRole::Generator, gen_group);
 
-    //rt_admin.signal_wait_grace_down().await?;
-    rt_admin.all_down_wait_signal().await?;
+    rt_admin
+        .all_down_wait_policy(ExitPolicyKind::Generator)
+        .await?;
 
     info_ctrl!("gen coroutine all end!");
     Ok(())

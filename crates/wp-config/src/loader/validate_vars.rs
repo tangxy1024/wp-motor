@@ -3,7 +3,7 @@
 //! 提供通用的未替换变量检测功能，用于在配置加载后验证所有变量是否已被正确替换。
 
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsValidationFrom};
+use orion_error::{ToStructError, UvsFrom};
 use serde::Serialize;
 
 /// 检测序列化后的配置中是否存在未替换的变量
@@ -42,19 +42,21 @@ pub fn check_unresolved_variables<T: Serialize>(
 ) -> OrionConfResult<()> {
     // 将配置序列化为JSON以便检查所有字段
     let json_str = serde_json::to_string(config).map_err(|e| {
-        ConfIOReason::from_validation(format!("Failed to serialize config for validation: {}", e))
+        ConfIOReason::from_validation()
             .to_err()
+            .with_detail(format!("Failed to serialize config for validation: {}", e))
     })?;
 
     // 查找未替换的变量
     if let Some(unresolved) = find_first_unresolved_var(&json_str) {
-        return Err(ConfIOReason::from_validation(format!(
-            "Unresolved variable '{}' found in {}. \
-            Please define this variable in .warp_parse/sec_key.toml or environment. \
-            Hint: For security-sensitive values, use SEC_ prefix (e.g., SEC_SINK_FILE_1).",
-            unresolved, config_name
-        ))
-        .to_err());
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "Unresolved variable '{}' found in {}. \
+                    Please define this variable in .warp_parse/sec_key.toml or environment. \
+                    Hint: For security-sensitive values, use SEC_ prefix (e.g., SEC_SINK_FILE_1).",
+                unresolved, config_name
+            )));
     }
 
     Ok(())

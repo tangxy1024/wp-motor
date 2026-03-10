@@ -4,10 +4,8 @@ use orion_conf::{
     ToStructError,
     error::{ConfIOReason, OrionConfResult},
 };
-use orion_error::UvsValidationFrom;
+use orion_error::UvsFrom;
 use serde::{Deserialize, Serialize};
-use wp_conf_base::ConfParser;
-use wp_connector_api::Tags;
 
 /// Source 实例级配置（最小实现）：
 /// - 扁平合入 CoreSourceSpec（name/type/params/tags）作为“单一事实来源”
@@ -75,10 +73,12 @@ impl From<&SourceInstanceConf> for wp_specs::CoreSourceSpec {
 impl Validate for SourceInstanceConf {
     fn validate(&self) -> OrionConfResult<()> {
         if self.core.name.trim().is_empty() {
-            return ConfIOReason::from_validation("source.name must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("source.name must not be empty"));
         }
-        if let Err(e) = Tags::validate(&self.core.tags) {
-            return ConfIOReason::from_validation(e).err_result();
+        if let Err(e) = crate::utils::validate_tags(&self.core.tags) {
+            return Err(ConfIOReason::from_validation().to_err().with_detail(e));
         }
         Ok(())
     }

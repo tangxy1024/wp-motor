@@ -1,7 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use orion_error::TestAssert;
 use std::fmt::Write as FmtWrite;
-use wp_parse_api::RawData;
+use wp_model_core::raw::RawData;
 use wp_parser::Parser;
 use wpl::{WplEvaluator, wpl_express};
 

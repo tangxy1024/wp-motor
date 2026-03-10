@@ -4,6 +4,69 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.18.1] - 2026-03-09
+
+### Changed
+- **Semantic Dict/Loader**: Switch external dictionary discovery to default path probing (`models/knowledge/semantic_dict.toml` then `knowledge/semantic_dict.toml`) and support work-root path injection from engine startup
+- **Semantic Dict/Config**: Add `enabled` switch for external dictionary config (also accepts legacy `enable` key) so external merge can be disabled while keeping builtin dictionary
+- **Observability**: Add startup logs for semantic analysis toggle and semantic dictionary load status
+- **Documentation**: Update Chinese/English semantic dictionary docs to reflect default-path loading and `enabled` usage
+
+### Fixed
+- **wp-proj/check**: Resolve semantic dictionary config under target `work_root` during project checks instead of relying on process environment
+- **Semantic Dict/Validation**: Treat missing auto-detected external config as builtin fallback and skip validation success output when external config is explicitly disabled
+
+## [1.18.0 Unreleased]
+
+### Changed
+- **Error Handling/Deps**: Complete workspace migration to `orion-error 0.6`/`orion_conf 0.5` API surface
+  - Replace legacy `Uvs*From` traits with `UvsFrom`
+  - Update `from_validation/from_conf/from_logic` call patterns and structured error detail attachment
+  - Align `UvsReason` matching with 0.6 enum shape and update `RawData` imports to new public path
+- **wp-proj/Runtime**: Refactor error conversion flow to `owe/want` style and align generators/loaders with unified error construction
+
+### Fixed
+- **Build**: Fix upgrade-induced compile breaks across `wp-config`, `wp-cli-core`, `wp-proj`, `wp-oml`, and `wp-engine` after dependency bump
+- **Tests**: Repair integration/runtime test paths impacted by error API migration
+
+## [1.17.6] - 2026-03-02
+
+### Changed
+- **Stats**: Refine `metric_set` merge logic and simplify conditional flow
+
+## [1.17.5] - 2026-02-27
+
+### Changed
+- **Documentation/OML**: Update OML grammar docs
+
+### Fixed
+- **Sinks/Buffer**: Fix `batch_size` behavior in sink batch path
+
+## [1.17.4] - 2026-02-18
+
+### Added
+- **Sinks/Config**: Add `batch_size` configuration to sink groups
+
+### Changed
+- **Sinks/Runtime**: Read and apply `batch_size` directly from `sink_group` configuration
+
+## [1.17.3] - 2026-02-16
+
+### Added
+- **Sinks/Buffer**: Add sink-level batch buffer with configurable `batch_size` parameter
+  - Small packages (< batch_size) enter pending buffer, flushed periodically or when buffer is full
+  - Large packages (>= batch_size) automatically bypass pending buffer for reduced overhead (zero-copy direct path)
+  - New `flush()` public API for manual buffer flush
+- **Sinks/Config**: Add `batch_timeout_ms` configuration to sink group (default 300ms), controls periodic buffer flush interval
+
+### Changed
+- **Sinks/File**: Remove `BufWriter` and `proc_cnt` periodic flush from `AsyncFileSink`, write directly to `tokio::fs::File`; upstream batch assembly makes userspace buffering redundant
+
+### Fixed
+- **wp-oml**: Fix llvm-cov warnings in parser and test modules
+
+
 ## [1.17.2 ] - 2026-02-13
 ### Changed
 - **wp-lang**: `kv`/`kvarr` key 解析支持括号类字符 `()`、`<>`、`[]`、`{}`，新增专用 `take_kv_key` 函数，不影响 WPL 语法层面其他模块的 key 解析

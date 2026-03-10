@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use orion_conf::EnvTomlLoad;
 use orion_conf::TomlIO;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsValidationFrom};
+use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use serde_json::json;
 use wp_conf::connectors::{ParamMap, param_value_from_toml};
@@ -53,10 +53,7 @@ impl WarpConf {
         let conn_id = match conf.output.connect.clone() {
             Some(cnn) => cnn,
             None => {
-                return ConfIOReason::from_validation(
-                    "wpgen.output.connect must be set (no default fallback)",
-                )
-                .err_result();
+                return ConfIOReason::from_validation().err_result();
             }
         };
         let (_start_root, conn) = self.load_connector_by_id(&conn_id, dict)?;
@@ -90,7 +87,8 @@ impl WarpConf {
     ) -> OrionConfResult<(String, ConnectorRec)> {
         let wp_conf = EngineConfig::load_or_init(self.work_root(), dict)
             .owe_res()
-            .with("load_or_init")?
+            .with("load_or_init")
+            .want("load engine config")?
             .conf_absolutize(self.work_root());
         let configured_root = wp_conf.sinks_root().to_string();
         let configured_path = Path::new(&configured_root);
@@ -107,12 +105,7 @@ impl WarpConf {
             if known.len() > 8 {
                 known.truncate(8);
             }
-            ConfIOReason::from_validation(format!(
-                "wpgen.output.connect='{}' 不存在：自 start='{}' 向上最多 32 层搜索 'connectors/sink.d' 未找到该 id；已知 id: [{}]",
-                conn_id,
-                start_root,
-                known.join(", ")
-            ))
+            ConfIOReason::from_validation()
         })?;
         Ok((start_root, conn))
     }
@@ -126,21 +119,16 @@ impl WarpConf {
         let mut merged = conn.default_params.clone();
         for (k, v) in override_tbl.iter() {
             if k == "params" || k == "params_override" {
-                return ConfIOReason::from_validation(format!(
-                    "invalid nested table '{}' in output.params; set keys [{}] directly",
-                    k,
-                    conn.allow_override.join(", ")
-                ))
-                .err_result();
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with(conn_id)
+                    .want("nested params/params_override is not allowed"));
             }
             if !conn.allow_override.iter().any(|x| x == k) {
-                return ConfIOReason::from_validation(format!(
-                    "override '{}' not allowed for connector '{}'; whitelist: [{}]",
-                    k,
-                    conn_id,
-                    conn.allow_override.join(", ")
-                ))
-                .err_result();
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with(conn_id)
+                    .want(format!("override '{}' not allowed", k)));
             }
             merged.insert(k.clone(), param_value_from_toml(v));
         }

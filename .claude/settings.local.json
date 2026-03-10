@@ -29,7 +29,12 @@
       "Bash(git stash:*)",
       "WebFetch(domain:docs.oasis-open.org)",
       "WebFetch(domain:www.elastic.co)",
-      "Bash(rustc:*)"
+      "Bash(rustc:*)",
+      "Bash(while read hash msg)",
+      "Bash(do echo \"=== $msg ===\")",
+      "Bash(git diff-tree:*)",
+      "Bash(done)",
+      "Bash(rg:*)"
     ]
   }
 }

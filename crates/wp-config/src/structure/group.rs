@@ -3,10 +3,8 @@ use orion_conf::{
     ToStructError,
     error::{ConfIOReason, OrionConfResult},
 };
-use orion_error::UvsValidationFrom;
+use orion_error::UvsFrom;
 use orion_variate::EnvEvaluable;
-use wp_conf_base::ConfParser;
-use wp_connector_api::Tags;
 use wp_model_core::model::fmt_def::TextFmt;
 
 use crate::types::AnyResult;
@@ -33,7 +31,21 @@ pub struct FlexGroup {
     /// 组级期望（仅公共参数，值域在每个 sink 下的 `sinks.expect` 覆盖）
     #[serde(default)]
     pub expect: Option<GroupExpectSpec>,
+    /// 批量超时时间，单位：毫秒，默认 300ms
+    #[serde(default = "default_batch_timeout_ms")]
+    pub batch_timeout_ms: u64,
+    /// 批量缓冲大小，默认 1024 条记录
+    #[serde(default = "default_batch_size")]
+    pub batch_size: usize,
     pub sinks: Vec<SinkInstanceConf>,
+}
+
+pub fn default_batch_timeout_ms() -> u64 {
+    300
+}
+
+pub fn default_batch_size() -> usize {
+    1024
 }
 
 impl EnvEvaluable<FlexGroup> for FlexGroup {
@@ -175,6 +187,18 @@ impl SinkGroupConf {
             SinkGroupConf::Fixed(x) => x.append(conf),
         }
     }
+    pub fn batch_timeout_ms(&self) -> u64 {
+        match self {
+            SinkGroupConf::Flexi(x) => x.batch_timeout_ms,
+            SinkGroupConf::Fixed(x) => x.batch_timeout_ms,
+        }
+    }
+    pub fn batch_size(&self) -> usize {
+        match self {
+            SinkGroupConf::Flexi(x) => x.batch_size,
+            SinkGroupConf::Fixed(x) => x.batch_size,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone, Default, Getters)]
@@ -186,6 +210,12 @@ pub struct FixedGroup {
     /// 并行度（用于 infra Fixed 组），默认 1；最大 10
     #[serde(default)]
     pub parallel: usize,
+    /// 批量超时时间，单位：毫秒，默认 300ms
+    #[serde(default = "default_batch_timeout_ms")]
+    pub batch_timeout_ms: u64,
+    /// 批量缓冲大小，默认 1024 条记录
+    #[serde(default = "default_batch_size")]
+    pub batch_size: usize,
 }
 impl EnvEvaluable<FixedGroup> for FixedGroup {
     fn env_eval(mut self, dict: &orion_variate::EnvDict) -> FixedGroup {
@@ -224,6 +254,8 @@ impl FlexGroup {
             filter: None,
             rule: WildArray::new(rule),
             expect: None,
+            batch_timeout_ms: default_batch_timeout_ms(),
+            batch_size: default_batch_size(),
             sinks: vec![SinkInstanceConf::null_new(
                 "test_sink".to_string(),
                 TextFmt::Raw,
@@ -241,6 +273,8 @@ impl FlexGroup {
             filter: None,
             rule: WildArray::default(),
             expect: None,
+            batch_timeout_ms: default_batch_timeout_ms(),
+            batch_size: default_batch_size(),
             sinks,
         }
     }
@@ -257,22 +291,29 @@ impl FlexGroup {
 impl crate::structure::Validate for FlexGroup {
     fn validate(&self) -> OrionConfResult<()> {
         if self.name.trim().is_empty() {
-            return ConfIOReason::from_validation("group.name must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.name must not be empty"));
         }
         if self.parallel > 10 {
-            return ConfIOReason::from_validation("group.parallel must be <= 10").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.parallel must be <= 10"));
         }
-        // tags 校验：统一使用 wp_model_core::tags::validate_tags
-        if let Err(e) = Tags::validate(&self.tags) {
-            return ConfIOReason::from_validation(e).err_result();
+        if let Err(e) = crate::utils::validate_tags(&self.tags) {
+            return Err(ConfIOReason::from_validation().to_err().with_detail(e));
         }
         if let Some(g) = &self.expect
             && let Err(e) = g.validate()
         {
-            return ConfIOReason::from_validation(e.to_string()).err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(e.to_string()));
         }
         if self.sinks.is_empty() {
-            return ConfIOReason::from_validation("group.sinks must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.sinks must not be empty"));
         }
         Ok(())
     }
@@ -281,18 +322,26 @@ impl crate::structure::Validate for FlexGroup {
 impl crate::structure::Validate for FixedGroup {
     fn validate(&self) -> OrionConfResult<()> {
         if self.name.trim().is_empty() {
-            return ConfIOReason::from_validation("group.name must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.name must not be empty"));
         }
         if self.parallel > 10 {
-            return ConfIOReason::from_validation("group.parallel must be <= 10").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.parallel must be <= 10"));
         }
         if let Some(g) = &self.expect
             && let Err(e) = g.validate()
         {
-            return ConfIOReason::from_validation(e.to_string()).err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(e.to_string()));
         }
         if self.sinks.is_empty() {
-            return ConfIOReason::from_validation("group.sinks must not be empty").err_result();
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail("group.sinks must not be empty"));
         }
         Ok(())
     }
@@ -303,14 +352,16 @@ impl crate::structure::Validate for SinkGroupConf {
         match self {
             SinkGroupConf::Flexi(x) => {
                 if let Err(e) = x.validate() {
-                    return ConfIOReason::from_validation(format!("flexi group validate: {}", e))
-                        .err_result();
+                    return Err(ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!("flexi group validate: {}", e)));
                 }
             }
             SinkGroupConf::Fixed(x) => {
                 if let Err(e) = x.validate() {
-                    return ConfIOReason::from_validation(format!("fixed group validate: {}", e))
-                        .err_result();
+                    return Err(ConfIOReason::from_validation()
+                        .to_err()
+                        .with_detail(format!("fixed group validate: {}", e)));
                 }
             }
         }
@@ -330,6 +381,8 @@ impl FlexGroup {
             filter: filter.map(|x| x.to_string()),
             rule: WildArray::default(),
             expect: None,
+            batch_timeout_ms: default_batch_timeout_ms(),
+            batch_size: default_batch_size(),
             sinks: vec![],
         }
     }
@@ -350,6 +403,8 @@ impl FlexGroup {
             tags: Vec::new(),
             filter: filter.map(|x| x.into()),
             rule: rule_matches,
+            batch_timeout_ms: default_batch_timeout_ms(),
+            batch_size: default_batch_size(),
             expect: None,
             sinks: vec![sink_conf],
         }
@@ -395,6 +450,8 @@ mod tests {
             tags: vec!["env-${TAG}".to_string()],
             filter: Some("${GROUP_FILTER}".to_string()),
             expect: None,
+            batch_timeout_ms: default_batch_timeout_ms(),
+            batch_size: default_batch_size(),
             sinks: vec![sink],
         };
 

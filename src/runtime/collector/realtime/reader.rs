@@ -21,7 +21,7 @@ pub async fn read_data(
 ) -> anyhow::Result<()> {
     use tokio::io::BufReader as AsyncBufReader;
     use wp_connector_api::SourceEvent;
-    use wp_parse_api::RawData;
+    use wp_model_core::raw::RawData;
 
     let mut reader = AsyncBufReader::new(input);
     let mut line = String::new();

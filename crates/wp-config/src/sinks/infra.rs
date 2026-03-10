@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::structure::{FixedGroup, FlexGroup};
+use crate::structure::{FixedGroup, FlexGroup, default_batch_size, default_batch_timeout_ms};
 use anyhow::Result as AnyResult;
 use orion_error::ToStructError;
 use orion_variate::{EnvDict, EnvEvaluable};
@@ -69,6 +69,8 @@ impl InfraSinkConf {
                             expect: g.expect.clone(),
                             sinks: g.sinks.clone(),
                             parallel: g.parallel_cnt(),
+                            batch_timeout_ms: default_batch_timeout_ms(),
+                            batch_size: 128,
                         }
                     }
                     crate::sinks::GROUP_MISS => {
@@ -77,6 +79,8 @@ impl InfraSinkConf {
                             expect: g.expect.clone(),
                             sinks: g.sinks.clone(),
                             parallel: g.parallel_cnt(),
+                            batch_timeout_ms: default_batch_timeout_ms(),
+                            batch_size: 1,
                         }
                     }
                     crate::sinks::GROUP_RESIDUE => {
@@ -85,6 +89,8 @@ impl InfraSinkConf {
                             expect: g.expect.clone(),
                             sinks: g.sinks.clone(),
                             parallel: g.parallel_cnt(),
+                            batch_timeout_ms: default_batch_timeout_ms(),
+                            batch_size: 1,
                         }
                     }
                     crate::sinks::GROUP_ERROR => {
@@ -93,10 +99,17 @@ impl InfraSinkConf {
                             expect: g.expect.clone(),
                             sinks: g.sinks.clone(),
                             parallel: g.parallel_cnt(),
+                            batch_timeout_ms: default_batch_timeout_ms(),
+                            batch_size: 1,
                         }
                     }
                     crate::sinks::GROUP_MONITOR => {
-                        conf.monitor = g;
+                        let mut monitor = g;
+                        // monitor 组需要实时性，未显式配置时默认 batch_size=1
+                        if monitor.batch_size == default_batch_size() {
+                            monitor.batch_size = 1;
+                        }
+                        conf.monitor = monitor;
                     }
                     _ => {
                         // 忽略业务组

@@ -145,7 +145,7 @@ impl AsyncRecordSink for TcpSink {
 #[async_trait]
 impl AsyncRawDataSink for TcpSink {
     async fn sink_str(&mut self, data: &str) -> SinkResult<()> {
-        let payload = build_payload(data, self.framing);
+        let payload = build_payload_bytes(data.as_bytes(), self.framing);
         if self.sent_cnt == 0 {
             log::info!(
                 "tcp sink first-send: framing={:?} msg_len={} preview='{}'",
@@ -158,7 +158,17 @@ impl AsyncRawDataSink for TcpSink {
         self.sent_cnt = self.sent_cnt.saturating_add(1);
         Ok(())
     }
-    async fn sink_bytes(&mut self, _data: &[u8]) -> SinkResult<()> {
+    async fn sink_bytes(&mut self, data: &[u8]) -> SinkResult<()> {
+        let payload = build_payload_bytes(data, self.framing);
+        if self.sent_cnt == 0 {
+            log::info!(
+                "tcp sink first-send(bytes): framing={:?} msg_len={}",
+                self.framing,
+                payload.len(),
+            );
+        }
+        self.writer.write(&payload).await?;
+        self.sent_cnt = self.sent_cnt.saturating_add(1);
         Ok(())
     }
 
@@ -196,7 +206,7 @@ impl AsyncRawDataSink for TcpSink {
                 // 但仍然可以批量发送
                 let mut buffers = Vec::with_capacity(data.len());
                 for str_data in &data {
-                    buffers.push(build_payload(str_data, self.framing));
+                    buffers.push(build_payload_bytes(str_data.as_bytes(), self.framing));
                 }
 
                 // 合并所有消息
@@ -219,10 +229,35 @@ impl AsyncRawDataSink for TcpSink {
             return Ok(());
         }
 
-        // u8 数据的 sink_bytes 实际上什么都不做，这里保持一致
-        // 如果需要实际的实现，可以根据 framing 模式处理
-        for bytes_data in data {
-            self.sink_bytes(bytes_data).await?;
+        match self.framing {
+            Framing::Line => {
+                let mut total_len = 0;
+                for bytes_data in &data {
+                    total_len += bytes_data.len();
+                    if bytes_data.last().is_none_or(|&b| b != b'\n') {
+                        total_len += 1;
+                    }
+                }
+
+                let mut buffer = Vec::with_capacity(total_len);
+                for bytes_data in &data {
+                    buffer.extend_from_slice(bytes_data);
+                    if bytes_data.last().is_none_or(|&b| b != b'\n') {
+                        buffer.push(b'\n');
+                    }
+                }
+
+                self.writer.write(&buffer).await?;
+                self.sent_cnt = self.sent_cnt.saturating_add(1);
+            }
+            Framing::Len => {
+                let mut combined = Vec::new();
+                for bytes_data in &data {
+                    combined.extend_from_slice(&build_payload_bytes(bytes_data, self.framing));
+                }
+                self.writer.write(&combined).await?;
+                self.sent_cnt = self.sent_cnt.saturating_add(data.len() as u64);
+            }
         }
         Ok(())
     }
@@ -271,13 +306,16 @@ impl SinkDefProvider for TcpFactory {
 // No external ACK mode; keep sink simple
 
 // --- pure helper for payload framing ---
-fn build_payload(data: &str, framing: Framing) -> Vec<u8> {
+fn build_payload_bytes(data: &[u8], framing: Framing) -> Vec<u8> {
     match framing {
         Framing::Line => {
-            if data.ends_with('\n') {
-                data.as_bytes().to_vec()
+            if data.last() == Some(&b'\n') {
+                data.to_vec()
             } else {
-                [data.as_bytes(), b"\n"].concat()
+                let mut buf = Vec::with_capacity(data.len() + 1);
+                buf.extend_from_slice(data);
+                buf.push(b'\n');
+                buf
             }
         }
         Framing::Len => {
@@ -286,7 +324,7 @@ fn build_payload(data: &str, framing: Framing) -> Vec<u8> {
                 &mut buf_writer(&mut buf),
                 format_args!("{} ", data.len()),
             );
-            buf.extend_from_slice(data.as_bytes());
+            buf.extend_from_slice(data);
             buf
         }
     }
@@ -337,9 +375,9 @@ mod tests {
 
     #[test]
     fn payload_builder_line_and_len() {
-        let p1 = build_payload("abc", Framing::Line);
+        let p1 = build_payload_bytes(b"abc", Framing::Line);
         assert_eq!(p1, b"abc\n");
-        let p2 = build_payload("hello", Framing::Len);
+        let p2 = build_payload_bytes(b"hello", Framing::Len);
         assert_eq!(p2, b"5 hello");
     }
 

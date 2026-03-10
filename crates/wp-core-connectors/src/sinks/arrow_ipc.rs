@@ -179,11 +179,14 @@ impl ArrowIpcSink {
             .map_err(|e| anyhow::anyhow!("{e}"))
             .owe_res()?;
 
-        match self.conn {
+        let send_result = match self.conn {
             ConnState::Connected { .. } => {
                 if let Err(e) = self.send_frame(&payload).await {
                     log::warn!("arrow_ipc send error: {e}");
                     self.enter_disconnected();
+                    Err(e)
+                } else {
+                    Ok(())
                 }
             }
             ConnState::Disconnected { next_attempt, .. } => {
@@ -194,14 +197,25 @@ impl ArrowIpcSink {
                     {
                         log::warn!("arrow_ipc send error after reconnect: {e}");
                         self.enter_disconnected();
+                        Err(e)
+                    } else if matches!(self.conn, ConnState::Connected { .. }) {
+                        Ok(())
+                    } else {
+                        Err(SinkError::from(SinkReason::sink(
+                            "arrow_ipc sink reconnect did not restore connection",
+                        )))
                     }
+                } else {
+                    Err(SinkError::from(SinkReason::sink(
+                        "arrow_ipc sink waiting for reconnect backoff",
+                    )))
                 }
             }
-            ConnState::Stopped => {}
-        }
+            ConnState::Stopped => Err(SinkError::from(SinkReason::sink("arrow_ipc sink stopped"))),
+        };
 
-        self.sent_cnt = self.sent_cnt.saturating_add(1);
-        if self.sent_cnt == 1 {
+        if send_result.is_ok() {
+            self.sent_cnt = self.sent_cnt.saturating_add(1);
             log::info!(
                 "arrow_ipc sink first-send: tag={} rows={} payload_bytes={}",
                 self.tag,
@@ -209,7 +223,7 @@ impl ArrowIpcSink {
                 payload.len(),
             );
         }
-        Ok(())
+        send_result
     }
 }
 
@@ -251,19 +265,27 @@ impl AsyncRecordSink for ArrowIpcSink {
 #[async_trait]
 impl AsyncRawDataSink for ArrowIpcSink {
     async fn sink_str(&mut self, _data: &str) -> SinkResult<()> {
-        Ok(())
+        Err(SinkError::from(SinkReason::sink(
+            "arrow_ipc sink only accepts records",
+        )))
     }
 
     async fn sink_bytes(&mut self, _data: &[u8]) -> SinkResult<()> {
-        Ok(())
+        Err(SinkError::from(SinkReason::sink(
+            "arrow_ipc sink only accepts records",
+        )))
     }
 
     async fn sink_str_batch(&mut self, _data: Vec<&str>) -> SinkResult<()> {
-        Ok(())
+        Err(SinkError::from(SinkReason::sink(
+            "arrow_ipc sink only accepts records",
+        )))
     }
 
     async fn sink_bytes_batch(&mut self, _data: Vec<&[u8]>) -> SinkResult<()> {
-        Ok(())
+        Err(SinkError::from(SinkReason::sink(
+            "arrow_ipc sink only accepts records",
+        )))
     }
 }
 
@@ -335,6 +357,7 @@ impl SinkDefProvider for ArrowIpcFactory {
 mod tests {
     use super::*;
     use tokio::io::AsyncReadExt;
+    use tokio::net::TcpListener;
 
     #[test]
     fn parse_target_tcp() {
@@ -415,12 +438,22 @@ mod tests {
         Some(payload)
     }
 
+    async fn bind_test_listener() -> Option<TcpListener> {
+        match TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => Some(listener),
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => None,
+            Err(e) => panic!("bind test listener failed: {e}"),
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     async fn sink_records_roundtrip_tcp() {
         use wp_arrow::ipc::decode_ipc;
         use wp_model_core::model::{Field, FieldStorage};
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let Some(listener) = bind_test_listener().await else {
+            return;
+        };
         let port = listener.local_addr().unwrap().port();
 
         let srv = tokio::spawn(async move {
@@ -455,7 +488,9 @@ mod tests {
         use wp_arrow::ipc::decode_ipc;
         use wp_model_core::model::{Field, FieldStorage};
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let Some(listener) = bind_test_listener().await else {
+            return;
+        };
         let port = listener.local_addr().unwrap().port();
 
         let srv = tokio::spawn(async move {
@@ -487,7 +522,9 @@ mod tests {
     async fn sink_empty_records() {
         use wp_arrow::ipc::decode_ipc;
 
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let Some(listener) = bind_test_listener().await else {
+            return;
+        };
         let port = listener.local_addr().unwrap().port();
 
         let srv = tokio::spawn(async move {
@@ -523,5 +560,23 @@ mod tests {
             assert_eq!(backoff, exp);
             backoff = (backoff * 2).min(BACKOFF_MAX);
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn send_batch_returns_err_while_disconnected() {
+        let mut sink = ArrowIpcSink {
+            conn: ConnState::Disconnected {
+                next_attempt: tokio::time::Instant::now() + Duration::from_secs(30),
+                backoff: BACKOFF_INITIAL,
+            },
+            host: "127.0.0.1".into(),
+            port: 9800,
+            rate_limit_rps: 0,
+            tag: "test".into(),
+            field_defs: Vec::new(),
+            sent_cnt: 0,
+        };
+
+        sink.send_batch(&[]).await.expect_err("send should fail");
     }
 }

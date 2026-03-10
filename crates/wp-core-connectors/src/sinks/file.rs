@@ -100,10 +100,52 @@ impl FileSinkSpec {
     }
 
     pub fn resolve_path(&self, _ctx: &SinkBuildCtx) -> String {
-        std::path::Path::new(&self.base)
-            .join(&self.file_name)
+        resolve_output_path(&self.base, &self.file_name, _ctx)
             .display()
             .to_string()
+    }
+}
+
+pub(crate) fn resolve_output_path(
+    base: &str,
+    file_name: &str,
+    ctx: &SinkBuildCtx,
+) -> std::path::PathBuf {
+    let base_path = std::path::Path::new(base);
+    let base_dir = if base_path.is_absolute() {
+        base_path.to_path_buf()
+    } else {
+        ctx.work_root.join(base_path)
+    };
+    let file_path = if ctx.replica_cnt > 1 {
+        shard_relative_file(std::path::Path::new(file_name), ctx.replica_idx)
+    } else {
+        std::path::PathBuf::from(file_name)
+    };
+    base_dir.join(file_path)
+}
+
+fn shard_relative_file(path: &std::path::Path, replica_idx: usize) -> std::path::PathBuf {
+    let parent = path.parent().unwrap_or_else(|| std::path::Path::new(""));
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("out.dat");
+    parent.join(shard_file_name(file_name, replica_idx))
+}
+
+fn shard_file_name(file_name: &str, replica_idx: usize) -> String {
+    if let Some(inner) = file_name.strip_suffix(".lock") {
+        return format!("{}.lock", shard_file_name(inner, replica_idx));
+    }
+    let path = std::path::Path::new(file_name);
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(file_name);
+    match path.extension().and_then(|s| s.to_str()) {
+        Some(ext) => format!("{stem}-r{replica_idx}.{ext}"),
+        None => format!("{stem}-r{replica_idx}"),
     }
 }
 
@@ -362,6 +404,7 @@ mod tests {
     use std::fs;
     use std::io::Write as _;
     use std::path::Path;
+    use std::path::PathBuf;
 
     use super::*;
 
@@ -444,5 +487,21 @@ mod tests {
 
         let _ = fs::remove_dir_all(&base);
         Ok(())
+    }
+
+    #[test]
+    fn resolve_output_path_uses_work_root_and_replica_suffix() {
+        let ctx = SinkBuildCtx::new_with_replica(PathBuf::from("/tmp/demo"), 2, 4);
+        let path = resolve_output_path("./data/out_dat", "sink/default.json", &ctx);
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/demo/data/out_dat/sink/default-r2.json")
+        );
+
+        let lock_path = resolve_output_path("./data/out_dat", "sink/default.dat.lock", &ctx);
+        assert_eq!(
+            lock_path,
+            PathBuf::from("/tmp/demo/data/out_dat/sink/default-r2.dat.lock")
+        );
     }
 }

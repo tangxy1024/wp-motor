@@ -218,7 +218,8 @@ impl AsyncRawDataSink for SyslogSink {
         Ok(())
     }
     async fn sink_bytes(&mut self, _data: &[u8]) -> SinkResult<()> {
-        Ok(())
+        let text = String::from_utf8_lossy(_data);
+        self.sink_str(text.as_ref()).await
     }
 
     async fn sink_str_batch(&mut self, data: Vec<&str>) -> SinkResult<()> {
@@ -254,10 +255,15 @@ impl AsyncRawDataSink for SyslogSink {
     }
 
     async fn sink_bytes_batch(&mut self, data: Vec<&[u8]>) -> SinkResult<()> {
-        for bytes_data in data {
-            self.sink_bytes(bytes_data).await?;
+        if data.is_empty() {
+            return Ok(());
         }
-        Ok(())
+        let texts: Vec<String> = data
+            .into_iter()
+            .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+            .collect();
+        let refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+        self.sink_str_batch(refs).await
     }
 }
 

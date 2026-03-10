@@ -17,6 +17,8 @@ use wp_connector_api::{
 };
 use wp_model_core::model::DataRecord;
 
+use crate::sinks::file::resolve_output_path;
+
 #[derive(Clone, Debug)]
 struct ArrowFileSpec {
     base: String,
@@ -62,8 +64,7 @@ impl ArrowFileSpec {
     }
 
     fn resolve_path(&self, _ctx: &SinkBuildCtx) -> String {
-        std::path::Path::new(&self.base)
-            .join(&self.file_name)
+        resolve_output_path(&self.base, &self.file_name, _ctx)
             .display()
             .to_string()
     }
@@ -205,19 +206,27 @@ impl AsyncRecordSink for ArrowFileSink {
 #[async_trait]
 impl AsyncRawDataSink for ArrowFileSink {
     async fn sink_str(&mut self, _data: &str) -> SinkResult<()> {
-        Ok(())
+        Err(wp_connector_api::SinkError::from(
+            wp_connector_api::SinkReason::sink("arrow_file sink only accepts records"),
+        ))
     }
 
     async fn sink_bytes(&mut self, _data: &[u8]) -> SinkResult<()> {
-        Ok(())
+        Err(wp_connector_api::SinkError::from(
+            wp_connector_api::SinkReason::sink("arrow_file sink only accepts records"),
+        ))
     }
 
     async fn sink_str_batch(&mut self, _data: Vec<&str>) -> SinkResult<()> {
-        Ok(())
+        Err(wp_connector_api::SinkError::from(
+            wp_connector_api::SinkReason::sink("arrow_file sink only accepts records"),
+        ))
     }
 
     async fn sink_bytes_batch(&mut self, _data: Vec<&[u8]>) -> SinkResult<()> {
-        Ok(())
+        Err(wp_connector_api::SinkError::from(
+            wp_connector_api::SinkReason::sink("arrow_file sink only accepts records"),
+        ))
     }
 }
 
@@ -361,5 +370,22 @@ mod tests {
             let frame = decode_ipc(&frame_bytes).unwrap();
             assert_eq!(frame.tag, "multi");
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn raw_payloads_are_rejected() {
+        let path = tmp_path("arrow");
+        let field_defs = vec![FieldDef::new("v", wp_arrow::schema::WpDataType::Chars)];
+        let mut sink = ArrowFileSink::new(
+            path.to_string_lossy().as_ref(),
+            "multi".into(),
+            field_defs,
+            false,
+        )
+        .await
+        .unwrap();
+
+        assert!(sink.sink_str("raw").await.is_err());
+        assert!(sink.sink_bytes(b"raw").await.is_err());
     }
 }

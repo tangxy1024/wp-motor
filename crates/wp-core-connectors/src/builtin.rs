@@ -68,7 +68,7 @@ pub fn builtin_sink_defs() -> Vec<ConnectorDef> {
             id: "blackhole_sink".into(),
             kind: "blackhole".into(),
             scope: ConnectorScope::Sink,
-            allow_override: Vec::new(),
+            allow_override: vec!["sleep_ms".into()],
             default_params: params,
             origin: Some("builtin:blackhole".into()),
         });

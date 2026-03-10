@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] - 2026-03-10
+
+### Added
+- **Sinks/Arrow**: Add `arrow-file` sink for local length-prefixed Arrow IPC frame output
+- **wp-proj/init**: Add `arrow_file_sink` and `arrow_tcp_sink` templates to project initialization
+
+### Changed
+- **Connectors/Core**: Move builtin connector sink implementations into the standalone `wp-core-connectors` crate and keep engine-side code as thin re-export wrappers
+- **Connectors/Packaging**: Decouple `wp-core-connectors` from `wp-conf` so it can be consumed as an independent crate
+- **Connectors/Net**: Reuse shared `NetWriter` infrastructure for Arrow-over-TCP output
+
+### Fixed
+- **Sinks/Runtime**: Fix `wp-core-connectors` sink runtime semantics around disconnect handling, raw input validation, output path resolution, and duplicate factory registration
+
 ## [1.18.1] - 2026-03-09
 
 ### Changed

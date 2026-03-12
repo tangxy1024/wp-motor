@@ -148,39 +148,57 @@ impl TaskManager {
                 )
             };
             pending_signal = false;
-            let snapshot =
-                self.build_runtime_snapshot(phase, phase_started_at.elapsed(), signal_received);
+            let action = self.next_exit_policy_action(
+                policy_kind,
+                phase,
+                phase_started_at,
+                signal_received,
+            )?;
 
-            match policy.decide(&snapshot) {
-                ExitAction::Stay => {}
-                ExitAction::EnterQuiescing(trigger) => {
-                    info_ctrl!(
-                        "exit-policy {:?}: enter quiescing (trigger={:?})",
-                        policy_kind,
-                        trigger
-                    );
-                    self.quiesce_by_policy(policy_kind).await?;
-                    phase = ExitPhase::Quiescing;
-                    phase_started_at = Instant::now();
-                }
-                ExitAction::EnterStopping(trigger) => {
-                    info_ctrl!(
-                        "exit-policy {:?}: enter stopping (trigger={:?})",
-                        policy_kind,
-                        trigger
-                    );
-                    let stop = policy.stop_cmd();
-                    let force_timeout = match trigger {
-                        ExitTrigger::QuiescingTimeout => Some(DAEMON_FORCE_STOP_TIMEOUT),
-                        ExitTrigger::Signal | ExitTrigger::RoleFinished(_) => None,
-                    };
-                    self.stop_role_groups(stop, force_timeout).await?;
-                    return Ok(());
-                }
+            if self
+                .apply_exit_policy_action(
+                    policy_kind,
+                    &mut phase,
+                    &mut phase_started_at,
+                    action,
+                    Some(&mut *policy),
+                )
+                .await?
+            {
+                return Ok(());
             }
 
             sleep(Duration::from_millis(100)).await;
         }
+    }
+
+    pub async fn poll_exit_policy(
+        &mut self,
+        policy_kind: ExitPolicyKind,
+        phase: &mut ExitPhase,
+        phase_started_at: &mut Instant,
+        signal_received: bool,
+    ) -> RunResult<bool> {
+        let action =
+            self.next_exit_policy_action(policy_kind, *phase, *phase_started_at, signal_received)?;
+        self.apply_exit_policy_action(policy_kind, phase, phase_started_at, action, None)
+            .await
+    }
+
+    pub fn next_exit_policy_action(
+        &self,
+        policy_kind: ExitPolicyKind,
+        phase: ExitPhase,
+        phase_started_at: Instant,
+        signal_received: bool,
+    ) -> RunResult<ExitAction> {
+        if self.role_groups.is_empty() {
+            return Err(RunReason::from_logic().to_err());
+        }
+        let mut policy = build_exit_policy(policy_kind);
+        let snapshot =
+            self.build_runtime_snapshot(phase, phase_started_at.elapsed(), signal_received);
+        Ok(policy.decide(&snapshot))
     }
 
     pub async fn all_down_force_policy(&mut self, policy_kind: ExitPolicyKind) -> RunResult<()> {
@@ -228,6 +246,46 @@ impl TaskManager {
             // daemon 进入 quiescing 时先停止 acceptor，避免 picker 已结束但 acceptor 仍持续监听导致无法收敛
             ExitPolicyKind::Daemon => self.request_role_stop(TaskRole::Acceptor).await,
             ExitPolicyKind::Batch | ExitPolicyKind::Generator => Ok(()),
+        }
+    }
+
+    pub async fn apply_exit_policy_action(
+        &mut self,
+        policy_kind: ExitPolicyKind,
+        phase: &mut ExitPhase,
+        phase_started_at: &mut Instant,
+        action: ExitAction,
+        policy: Option<&mut dyn super::exit_policy::ExitPolicy>,
+    ) -> RunResult<bool> {
+        match action {
+            ExitAction::Stay => Ok(false),
+            ExitAction::EnterQuiescing(trigger) => {
+                info_ctrl!(
+                    "exit-policy {:?}: enter quiescing (trigger={:?})",
+                    policy_kind,
+                    trigger
+                );
+                self.quiesce_by_policy(policy_kind).await?;
+                *phase = ExitPhase::Quiescing;
+                *phase_started_at = Instant::now();
+                Ok(false)
+            }
+            ExitAction::EnterStopping(trigger) => {
+                info_ctrl!(
+                    "exit-policy {:?}: enter stopping (trigger={:?})",
+                    policy_kind,
+                    trigger
+                );
+                let stop = policy
+                    .map(|p| p.stop_cmd())
+                    .unwrap_or(ShutdownCmd::Immediate);
+                let force_timeout = match trigger {
+                    ExitTrigger::QuiescingTimeout => Some(DAEMON_FORCE_STOP_TIMEOUT),
+                    ExitTrigger::Signal | ExitTrigger::RoleFinished(_) => None,
+                };
+                self.stop_role_groups(stop, force_timeout).await?;
+                Ok(true)
+            }
         }
     }
 

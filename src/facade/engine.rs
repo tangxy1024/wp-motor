@@ -5,7 +5,7 @@ use orion_variate::EnvDict;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::Receiver;
 use tokio::time::timeout;
 use wp_knowledge::facade::init_thread_cloned_from_knowdb;
 
@@ -19,6 +19,10 @@ use wp_stat::{StatRequires, StatStage};
 
 use crate::facade::args::ParseArgs;
 use crate::facade::args::resolve_run_work_root;
+use crate::facade::runtime_ctrl::{
+    RuntimeCommandReq, RuntimeCommandResp, RuntimeCommandResult, RuntimeControlHandle,
+    default_runtime_command_bus,
+};
 use crate::orchestrator::config::loader::WarpConf;
 use crate::orchestrator::config::models::{load_warp_engine_confs, stat_reqs_from};
 use crate::orchestrator::engine::resource::EngineResource;
@@ -27,6 +31,8 @@ use crate::orchestrator::engine::service::{
     EngineRuntime, start_processing_tasks, start_warp_service,
 };
 use crate::resources::core::manager::ResManager;
+use crate::runtime::actor::exit_policy::ExitAction;
+use crate::runtime::actor::exit_policy::ExitPhase;
 use crate::runtime::actor::{self, ExitPolicyKind};
 use crate::runtime::sink::act_sink::SinkService;
 use crate::runtime::sink::infrastructure::InfraSinkService;
@@ -47,12 +53,9 @@ pub struct WpApp {
     conf_manager: WarpConf,
     stat_reqs: StatRequires,
     run_args: RunArgs,
-    #[allow(dead_code)]
-    cmd_send: Sender<CommandType>,
-    #[allow(dead_code)]
-    cmd_recv: Receiver<CommandType>,
+    control_handle: RuntimeControlHandle,
+    cmd_recv: Receiver<RuntimeCommandReq>,
     pid_guard: Option<PidRec>,
-    bus_enabled: bool,
     env_dict: EnvDict,
 }
 
@@ -72,28 +75,30 @@ impl WpApp {
         info_ctrl!("log conf: {} ", main_conf.log_conf());
         // 初始化引擎侧注册表：注册内置工厂 + 导入 API 已注册工厂 + 打印注册清单
         crate::connectors::startup::init_runtime_registries();
-        let (cmd_send, cmd_recv) = tokio::sync::mpsc::channel::<CommandType>(1000);
+        let (control_handle, cmd_recv) = default_runtime_command_bus();
         Ok(Self {
             main_conf,
             conf_manager,
             stat_reqs,
             run_args,
-            cmd_send,
+            control_handle,
             cmd_recv,
             pid_guard: None,
-            bus_enabled: false,
             env_dict,
         })
+    }
+
+    pub fn control_handle(&self) -> RuntimeControlHandle {
+        self.control_handle.clone()
     }
 
     /// 若启用企业控制面，连接命令总线以支持热重载
     pub async fn start_cmd_if(&mut self) -> RunResult<()> {
         #[cfg(feature = "enterprise-backend")]
         {
-            let enabled = crate::wp_ctrl_enterprise::start(self.cmd_send.clone())
+            crate::wp_ctrl_enterprise::start(self.control_handle.command_sender())
                 .await
                 .owe_conf()?;
-            self.bus_enabled = enabled;
             Ok(())
         }
         #[cfg(not(feature = "enterprise-backend"))]
@@ -159,7 +164,7 @@ impl WpApp {
         Ok(task_manager)
     }
 
-    async fn reload_processing_p0(&mut self, runtime: &mut EngineRuntime) -> RunResult<()> {
+    async fn reload_processing_p0(&mut self, runtime: &mut EngineRuntime) -> RunResult<bool> {
         info_ctrl!("start runtime reload P0");
         let eng_res = load_processing_res(
             &self.main_conf,
@@ -177,6 +182,7 @@ impl WpApp {
         .await?;
         let mut pending_processing = Some(processing);
         let deadline = Instant::now() + P0_RELOAD_DRAIN_TIMEOUT;
+        let mut force_replaced = false;
 
         if let Err(err) = runtime.isolate_picker().await {
             if let Some(processing) = pending_processing.take() {
@@ -196,6 +202,7 @@ impl WpApp {
                 }
                 return Err(force_err);
             }
+            force_replaced = true;
         }
 
         runtime.install_processing_tasks(
@@ -205,6 +212,32 @@ impl WpApp {
         );
         runtime.resume_picker().await?;
         info_ctrl!("runtime reload P0 done");
+        Ok(force_replaced)
+    }
+
+    async fn handle_runtime_command(
+        &mut self,
+        runtime: &mut EngineRuntime,
+        req: RuntimeCommandReq,
+    ) -> RunResult<()> {
+        let request_id = req.request_id().to_string();
+        self.control_handle.mark_running(&request_id, req.command());
+
+        let result = match req.command() {
+            CommandType::LoadModel => match self.reload_processing_p0(runtime).await {
+                Ok(false) => RuntimeCommandResult::ReloadDone,
+                Ok(true) => RuntimeCommandResult::ReloadDoneWithForceReplace,
+                Err(err) => {
+                    warn_ctrl!("runtime reload P0 failed: {}", err);
+                    RuntimeCommandResult::ReloadFailed {
+                        reason: err.to_string(),
+                    }
+                }
+            },
+        };
+
+        self.control_handle.finish(&request_id, result.clone());
+        req.respond(RuntimeCommandResp::accepted(request_id, result));
         Ok(())
     }
 
@@ -220,16 +253,15 @@ impl WpApp {
         };
         warn_ctrl!("engine started!");
 
-        if self.bus_enabled {
+        if matches!(run_mode, RunMode::Daemon) {
+            self.control_handle.activate();
+            let mut exit_phase = ExitPhase::Running;
+            let mut phase_started_at = Instant::now();
             loop {
                 tokio::select! {
-                    Some(cmd) = self.cmd_recv.recv() => {
-                        match cmd {
-                            CommandType::LoadModel => {
-                                if let Err(err) = self.reload_processing_p0(&mut task_admin).await {
-                                    warn_ctrl!("runtime reload P0 failed: {}", err);
-                                }
-                            }
+                    Some(req) = self.cmd_recv.recv() => {
+                        if let Err(err) = self.handle_runtime_command(&mut task_admin, req).await {
+                            warn_ctrl!("runtime command loop failed: {}", err);
                         }
                     }
                     stop = async {
@@ -239,8 +271,17 @@ impl WpApp {
                         }
                         false
                     } => {
-                        if stop {
-                            task_admin.shutdown_with_signal(exit_policy, true).await?;
+                        let action = task_admin
+                            .task_manager_mut()
+                            .next_exit_policy_action(exit_policy, exit_phase, phase_started_at, stop)?;
+                        if !matches!(action, ExitAction::Stay) {
+                            self.control_handle.deactivate();
+                        }
+                        if task_admin
+                            .task_manager_mut()
+                            .apply_exit_policy_action(exit_policy, &mut exit_phase, &mut phase_started_at, action, None)
+                            .await?
+                        {
                             break;
                         }
                     }
@@ -248,6 +289,7 @@ impl WpApp {
                 }
             }
         } else {
+            self.control_handle.deactivate();
             task_admin.shutdown(exit_policy).await?;
         }
         Ok(())

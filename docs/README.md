@@ -116,6 +116,11 @@ docs/
   - 优先 graceful drain，超时 fallback 到 force replace
   - 包含更新语义、失败处理、测试要求与观测点
 
+- **[Warp-Parse 远程 Reload 管理面设计](design/runtime_reload_admin_http_design.md)** ⭐ 重要
+  - admin HTTP 由 `warp-parse` 宿主层实现
+  - `wp-motor` 只负责 runtime command bus 与 reload 执行
+  - 包含 Bearer Token、HTTPS、并发控制、审计与 CLI 对接方案
+
 **适用人群**: 核心开发者、架构评审者、运行时改造参与者
 
 ## 🔍 快速导航
@@ -143,6 +148,9 @@ docs/
 
 ### 我想 review 低中断更新方案
 → [WPL / OML / KnowDB 低中断更新设计](design/runtime_hot_reload_design.md)
+
+### 我想 review 远程 reload 管理面方案
+→ [Warp-Parse 远程 Reload 管理面设计](design/runtime_reload_admin_http_design.md)
 
 ## 📝 文档规范
 
@@ -188,6 +196,7 @@ docs/
 ## 📅 最近更新
 
 - **2026-03-11**: 更新 `WPL / OML / KnowDB` 运行时更新设计，明确当前实现为 `P1`
+- **2026-03-11**: 添加 `WParse` 远程 reload 管理面设计文档
 - **2026-03-10**: 添加 `WPL / OML / KnowDB` 运行时热更新设计文档
 - **2026-02-01**: 添加 OML 完整文档（使用总览 + 19 个 PipeFun 参考）
 - **2026-02-01**: 添加 NLP 函数文档（extract_main_word + extract_subject_object）

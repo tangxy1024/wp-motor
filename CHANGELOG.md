@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0 Unreleased]
+
+### Added
+- **Runtime Control**: Add a structured in-process runtime command bus for `LoadModel`, including `oneshot` replies, reload single-flight gating, and runtime status snapshots for host-layer management integration
+
+### Changed
+- **Reload Runtime**: Return structured reload outcomes (`done`, `done_with_force_replace`, `failed`) from `wp-motor` so `warp-parse` can map results to admin HTTP responses
+- **Daemon Lifecycle**: Reconnect daemon command handling with the existing exit-policy state machine to preserve quiescing/stopping behavior while runtime commands are enabled
+- **Control Readiness**: Reject runtime commands before the daemon loop is ready, and stop accepting new commands as soon as shutdown or quiescing begins
+- **Documentation**: Clarify the remote reload boundary so admin HTTP lives in `warp-parse`, while `wp-motor` only owns runtime command execution and status reporting
+
 ## [1.18.1] - 2026-03-09
 
 ### Changed

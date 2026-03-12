@@ -11,12 +11,17 @@ pub mod enrich;
 pub mod generator;
 pub mod kit;
 pub mod rescue;
+pub mod runtime_ctrl;
 pub mod test_helpers;
 pub mod usecases;
 
 // 常用导出，便于应用端按需使用
 pub use engine::WpApp;
 pub use rescue::WpRescueApp;
+pub use runtime_ctrl::{
+    RuntimeCommandResp, RuntimeCommandResult, RuntimeCommandSendError, RuntimeCommandSender,
+    RuntimeControlHandle, RuntimeStatusSnapshot,
+};
 
 // 可选便捷导出：在保持命名空间清晰的同时，减少上层使用样板。
 pub use enrich::{EnrichLibAble, EnrichingAble};

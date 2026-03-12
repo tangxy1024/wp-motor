@@ -12,15 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **wp-proj/init**: Add `arrow_file_sink` and `arrow_tcp_sink` templates to project initialization
 - **OML/Match**: Add `iequals_any(...)` for case-insensitive multi-candidate matching in `match` expressions
 - **OML/Lookup**: Add `lookup_nocase(dict, key, default)` for case-insensitive lookup against static object dictionaries
+- **OML/Calc**: Add `calc(...)` arithmetic expressions with `+ - * / %` and `abs/round/floor/ceil`
 
 ### Changed
 - **Connectors/Core**: Move builtin connector sink implementations into the standalone `wp-core-connectors` crate and keep engine-side code as thin re-export wrappers
 - **Connectors/Packaging**: Decouple `wp-core-connectors` from `wp-conf` so it can be consumed as an independent crate
 - **Connectors/Net**: Reuse shared `NetWriter` infrastructure for Arrow-over-TCP output
 - **Documentation/OML**: Update Chinese and English OML function and grammar references for `iequals_any` and `lookup_nocase`
+- **Documentation/OML**: Add Chinese and English OML docs for `calc(...)` arithmetic expressions
 
 ### Fixed
 - **Sinks/Runtime**: Fix `wp-core-connectors` sink runtime semantics around disconnect handling, raw input validation, output path resolution, and duplicate factory registration
+- **OML/Calc**: Normalize invalid arithmetic cases in `calc(...)` to `ignore`, including integer overflow, non-finite floats, and large-integer rounding edge cases
 
 ## [1.18.1] - 2026-03-09
 

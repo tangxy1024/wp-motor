@@ -9,6 +9,7 @@ pub enum OmlIssueKind {
     UnsupportedConvert, // 不支持的类型转换
     ParseFail,          // 文本解析为目标类型失败
     BatchNoMatch,       // 批量匹配 0 命中
+    MathEvalFail,       // 数学表达式求值失败
 }
 
 #[derive(Debug, Clone)]
@@ -31,6 +32,7 @@ impl OmlIssue {
             OmlIssueKind::UnsupportedConvert => format!("unsupported_convert: {}", self.detail),
             OmlIssueKind::ParseFail => format!("parse_fail: {}", self.detail),
             OmlIssueKind::BatchNoMatch => format!("batch_no_match: {}", self.detail),
+            OmlIssueKind::MathEvalFail => format!("math_eval_fail: {}", self.detail),
         }
     }
 }

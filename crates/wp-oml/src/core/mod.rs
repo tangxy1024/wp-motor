@@ -64,6 +64,7 @@ impl FieldExtractor for PreciseEvaluator {
     ) -> Option<DataField> {
         match self {
             PreciseEvaluator::Sql(o) => o.extract_one(target, src, dst),
+            PreciseEvaluator::Calc(o) => o.extract_one(target, src, dst),
             PreciseEvaluator::Match(o) => o.extract_one(target, src, dst),
             PreciseEvaluator::Lookup(o) => o.extract_one(target, src, dst),
             PreciseEvaluator::Obj(o) => o.extract_one(target, src, dst),
@@ -88,6 +89,7 @@ impl FieldExtractor for PreciseEvaluator {
         dst: &DataRecord,
     ) -> Option<FieldStorage> {
         match self {
+            PreciseEvaluator::Calc(o) => o.extract_storage(target, src, dst),
             // Static symbol reference: return Shared variant (zero-copy)
             // Skip extract_one to avoid unnecessary clone
             PreciseEvaluator::ObjArc(arc) => Some(FieldStorage::from_shared(arc.clone())),
@@ -108,6 +110,7 @@ impl FieldExtractor for PreciseEvaluator {
     ) -> Vec<DataField> {
         match self {
             PreciseEvaluator::Sql(o) => o.extract_more(src, dst, cache),
+            PreciseEvaluator::Calc(o) => o.extract_more(src, dst, cache),
             PreciseEvaluator::Match(o) => o.extract_more(src, dst, cache),
             PreciseEvaluator::Lookup(o) => o.extract_more(src, dst, cache),
             PreciseEvaluator::Obj(o) => o.extract_more(src, dst, cache),
@@ -128,6 +131,7 @@ impl FieldExtractor for PreciseEvaluator {
     fn support_batch(&self) -> bool {
         match self {
             PreciseEvaluator::Sql(o) => o.support_batch(),
+            PreciseEvaluator::Calc(o) => o.support_batch(),
             PreciseEvaluator::Match(o) => o.support_batch(),
             PreciseEvaluator::Lookup(o) => o.support_batch(),
             PreciseEvaluator::Obj(o) => o.support_batch(),

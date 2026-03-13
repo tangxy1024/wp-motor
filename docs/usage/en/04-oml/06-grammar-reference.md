@@ -87,6 +87,7 @@ eval             = take_expr
                  | pipe_expr
                  | map_expr
                  | collect_expr
+                 | calc_expr
                  | match_expr
                  | sql_expr
                  | value_expr
@@ -288,6 +289,36 @@ ports = collect read(keys:[sport, dport]) ;
 metrics = collect read(keys:[cpu_*]) ;
 ```
 
+### Arithmetic Expressions
+
+```ebnf
+calc_expr         = "calc", "(", calc_add_expr, ")" ;
+calc_add_expr     = calc_mul_expr, { ("+" | "-"), calc_mul_expr } ;
+calc_mul_expr     = calc_unary_expr, { ("*" | "/" | "%"), calc_unary_expr } ;
+calc_unary_expr   = [ "-" ], calc_primary_expr ;
+calc_primary_expr = number
+                  | var_get
+                  | calc_fun_expr
+                  | "(", calc_add_expr, ")" ;
+calc_fun_expr     = calc_fun, "(", calc_add_expr, ")" ;
+calc_fun          = "abs" | "round" | "floor" | "ceil" ;
+```
+
+**Notes**:
+- `var_get` supports `read(...)`, `take(...)`, and the `@field` shorthand
+- Operands only accept numeric literals or numeric fields; `/` always returns `float`
+- `%` only supports integer modulo; divide-by-zero, missing fields, non-numeric inputs, and invalid `%` return `ignore`
+- `match` branch values still use the existing sub-expression set and do not accept `calc(...)` directly; bind a temp field first if needed
+
+**Examples**:
+```oml
+risk_score : float = calc(read(cpu) * 0.7 + read(mem) * 0.3) ;
+delta      : digit = calc(read(cur) - read(prev)) ;
+ratio      : float = calc(read(ok_cnt) / read(total_cnt)) ;
+bucket     : digit = calc(read(uid) % 16) ;
+error_pct  : digit = calc(round((read(err_cnt) * 100) / read(total_cnt))) ;
+```
+
 ### Pattern Matching
 
 ```ebnf
@@ -296,10 +327,10 @@ match_expr       = "match", match_source, "{", case1, { case1 }, [ default_case 
                  | "match", "(", var_get, ",", var_get, { ",", var_get }, ")", "{", case_multi, { case_multi }, [ default_case ], "}" ;
 
 match_source     = var_get ;
-case1            = cond1, "=>", calc, [ "," ], [ ";" ] ;
-case_multi       = "(", cond1, ",", cond1, { ",", cond1 }, ")", "=>", calc, [ "," ], [ ";" ] ;
-default_case     = "_", "=>", calc, [ "," ], [ ";" ] ;
-calc             = read_expr | take_expr | value_expr | collect_expr | static_ref ;
+case1            = cond1, "=>", match_value, [ "," ], [ ";" ] ;
+case_multi       = "(", cond1, ",", cond1, { ",", cond1 }, ")", "=>", match_value, [ "," ], [ ";" ] ;
+default_case     = "_", "=>", match_value, [ "," ], [ ";" ] ;
+match_value      = read_expr | take_expr | value_expr | collect_expr | static_ref ;
 
 cond1            = cond1_atom, { "|", cond1_atom }   (* OR: multiple conditions separated by | *)
 cond1_atom       = "in", "(", value_expr, ",", value_expr, ")"
@@ -322,7 +353,7 @@ match_fun        = "starts_with",  "(", string, ")"   (* prefix matching *)
 **Notes**:
 - **Multi-source matching**: `match (src1, src2, ...)` supports any number of source fields (>=2), not limited to two
 - **OR syntax**: Use `|` to separate multiple alternative conditions at a condition position; any match succeeds
-- **Function matching**: 10 built-in match functions for flexible string and numeric comparisons
+- **Function matching**: 11 built-in match functions for flexible string and numeric comparisons
 
 **Examples**:
 ```oml
@@ -384,7 +415,50 @@ status = match read(result) {
     iequals('error') => chars(fail) ;
     _ => chars(other) ;
 } ;
+
+# Case-insensitive multi-value matching
+status_class = match read(status) {
+    iequals_any('success', 'ok', 'done') => chars(good) ;
+    iequals_any('error', 'failed', 'timeout') => chars(bad) ;
+    _ => chars(other) ;
+} ;
 ```
+
+### `lookup_nocase`
+
+`lookup_nocase(dict_symbol, key_expr, default_expr)` performs a case-insensitive lookup against a static object dictionary.
+
+```oml
+static {
+    status_score = object {
+        error = float(90.0);
+        warning = float(70.0);
+        success = float(20.0);
+    };
+}
+
+risk_score : float = lookup_nocase(status_score, read(status), 40.0) ;
+```
+
+- `dict_symbol` must reference an object defined in `static`
+- `key_expr` is normalized with `trim + lowercase` before lookup
+- If the key misses or is not a string, `default_expr` is returned
+
+### `calc(...)`
+
+`calc(expr)` evaluates an explicit numeric arithmetic expression.
+
+```oml
+risk_score : float = calc(read(cpu) * 0.7 + read(mem) * 0.3) ;
+bucket     : digit = calc(read(uid) % 16) ;
+distance   : float = calc(abs(read(actual) - read(expect))) ;
+error_pct  : digit = calc(round((read(err_cnt) * 100) / read(total_cnt))) ;
+```
+
+- Supported operators: `+ - * / %`
+- Supported functions: `abs(...)`, `round(...)`, `floor(...)`, `ceil(...)`
+- Supported field access: `read(...)`, `take(...)`, `@field`
+- Divide-by-zero, missing fields, non-numeric inputs, and float `%` all return `ignore`
 
 ---
 

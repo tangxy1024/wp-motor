@@ -87,6 +87,7 @@ eval             = take_expr
                  | pipe_expr
                  | map_expr
                  | collect_expr
+                 | calc_expr
                  | match_expr
                  | sql_expr
                  | value_expr
@@ -288,6 +289,36 @@ ports = collect read(keys:[sport, dport]) ;
 metrics = collect read(keys:[cpu_*]) ;
 ```
 
+### 算术表达式
+
+```ebnf
+calc_expr         = "calc", "(", calc_add_expr, ")" ;
+calc_add_expr     = calc_mul_expr, { ("+" | "-"), calc_mul_expr } ;
+calc_mul_expr     = calc_unary_expr, { ("*" | "/" | "%"), calc_unary_expr } ;
+calc_unary_expr   = [ "-" ], calc_primary_expr ;
+calc_primary_expr = number
+                  | var_get
+                  | calc_fun_expr
+                  | "(", calc_add_expr, ")" ;
+calc_fun_expr     = calc_fun, "(", calc_add_expr, ")" ;
+calc_fun          = "abs" | "round" | "floor" | "ceil" ;
+```
+
+**说明**：
+- `var_get` 支持 `read(...)`、`take(...)`，也支持 `@field` 语法糖
+- 操作数仅接受数值字面量或数值字段；`/` 始终返回 `float`
+- `%` 仅支持整数取模；除零、字段缺失、非数值输入、非法 `%` 都会返回 `ignore`
+- 当前 `match` 分支值仍沿用既有子表达式，不直接接受 `calc(...)`；如需复用，先绑定到临时字段
+
+**示例**：
+```oml
+risk_score : float = calc(read(cpu) * 0.7 + read(mem) * 0.3) ;
+delta      : digit = calc(read(cur) - read(prev)) ;
+ratio      : float = calc(read(ok_cnt) / read(total_cnt)) ;
+bucket     : digit = calc(read(uid) % 16) ;
+error_pct  : digit = calc(round((read(err_cnt) * 100) / read(total_cnt))) ;
+```
+
 ### 模式匹配
 
 ```ebnf
@@ -296,10 +327,10 @@ match_expr       = "match", match_source, "{", case1, { case1 }, [ default_case 
                  | "match", "(", var_get, ",", var_get, { ",", var_get }, ")", "{", case_multi, { case_multi }, [ default_case ], "}" ;
 
 match_source     = var_get ;
-case1            = cond1, "=>", calc, [ "," ], [ ";" ] ;
-case_multi       = "(", cond1, ",", cond1, { ",", cond1 }, ")", "=>", calc, [ "," ], [ ";" ] ;
-default_case     = "_", "=>", calc, [ "," ], [ ";" ] ;
-calc             = read_expr | take_expr | value_expr | collect_expr | static_ref ;
+case1            = cond1, "=>", match_value, [ "," ], [ ";" ] ;
+case_multi       = "(", cond1, ",", cond1, { ",", cond1 }, ")", "=>", match_value, [ "," ], [ ";" ] ;
+default_case     = "_", "=>", match_value, [ "," ], [ ";" ] ;
+match_value      = read_expr | take_expr | value_expr | collect_expr | static_ref ;
 
 cond1            = cond1_atom, { "|", cond1_atom }   (* OR：多个条件用 | 分隔 *)
 cond1_atom       = "in", "(", value_expr, ",", value_expr, ")"
@@ -322,7 +353,7 @@ match_fun        = "starts_with",  "(", string, ")"   (* 前缀匹配 *)
 **说明**：
 - **多源匹配**：`match (src1, src2, ...)` 支持任意数量的源字段（≥2），不再限于双源
 - **OR 语法**：在条件位置使用 `|` 分隔多个备选条件，任一匹配即成功
-- **函数匹配**：支持 10 种内置匹配函数，用于字符串、数值的灵活判断
+- **函数匹配**：支持 11 种内置匹配函数，用于字符串、数值的灵活判断
 
 **示例**：
 ```oml
@@ -384,7 +415,50 @@ status = match read(result) {
     iequals('error') => chars(fail) ;
     _ => chars(other) ;
 } ;
+
+# 忽略大小写多值匹配
+status_class = match read(status) {
+    iequals_any('success', 'ok', 'done') => chars(good) ;
+    iequals_any('error', 'failed', 'timeout') => chars(bad) ;
+    _ => chars(other) ;
+} ;
 ```
+
+### `lookup_nocase`
+
+`lookup_nocase(dict_symbol, key_expr, default_expr)` 用于基于静态 object 做忽略大小写查表。
+
+```oml
+static {
+    status_score = object {
+        error = float(90.0);
+        warning = float(70.0);
+        success = float(20.0);
+    };
+}
+
+risk_score : float = lookup_nocase(status_score, read(status), 40.0) ;
+```
+
+- `dict_symbol` 必须引用 `static` 中定义的 object
+- `key_expr` 会按 `trim + lowercase` 归一化后查表
+- 未命中或 key 不是字符串时，返回 `default_expr`
+
+### `calc(...)`
+
+`calc(expr)` 用于显式执行数值算术表达式。
+
+```oml
+risk_score : float = calc(read(cpu) * 0.7 + read(mem) * 0.3) ;
+bucket     : digit = calc(read(uid) % 16) ;
+distance   : float = calc(abs(read(actual) - read(expect))) ;
+error_pct  : digit = calc(round((read(err_cnt) * 100) / read(total_cnt))) ;
+```
+
+- 支持运算符：`+ - * / %`
+- 支持函数：`abs(...)`、`round(...)`、`floor(...)`、`ceil(...)`
+- 支持字段访问：`read(...)`、`take(...)`、`@field`
+- 除零、字段缺失、非数值输入、浮点 `%` 都返回 `ignore`
 
 ---
 

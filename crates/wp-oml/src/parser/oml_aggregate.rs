@@ -12,10 +12,12 @@ use crate::language::{MatchSource, RecordOperation};
 
 use crate::language::DirectAccessor;
 use crate::language::{BatchEvalTarget, EvaluationTarget};
+use crate::parser::calc_prm::oml_aga_calc;
 use crate::parser::collect_prm::oml_aga_collect;
 use crate::parser::fmt_prm::oml_aga_fmt;
 use crate::parser::fun_prm::oml_gw_fun;
 use crate::parser::keyword::{kw_crate_symbol, kw_in, kw_keys, kw_option, kw_read, kw_take};
+use crate::parser::lookup_prm::oml_aga_lookup_nocase;
 use crate::parser::map_prm::oml_aga_map;
 use crate::parser::match_prm::oml_aga_match;
 use crate::parser::pipe_prm; // for oml_aga_pipe_noprefix
@@ -129,7 +131,9 @@ pub fn oml_aggregate(data: &mut &str) -> WResult<EvalExp> {
         EvalExp::Batch(err_convert(builder.build(), "BatchEvalExp Build failed")?)
     } else {
         let gw = match key {
+            "calc" => oml_aga_calc.parse_next(data)?,
             "match" => oml_aga_match.parse_next(data)?,
+            "lookup_nocase" => oml_aga_lookup_nocase.parse_next(data)?,
             "object" => oml_aga_map.parse_next(data)?,
             "pipe" => oml_aga_pipe.parse_next(data)?,
             "collect" => oml_aga_collect.parse_next(data)?,

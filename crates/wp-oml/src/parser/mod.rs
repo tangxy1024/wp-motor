@@ -1,3 +1,4 @@
+mod calc_prm;
 pub mod code;
 mod collect_prm;
 mod cond;
@@ -5,6 +6,7 @@ pub mod error;
 mod fmt_prm;
 mod fun_prm;
 pub mod keyword;
+mod lookup_prm;
 mod map_prm;
 mod match_prm;
 mod oml_acq;

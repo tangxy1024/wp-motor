@@ -2,7 +2,7 @@
 
 本目录存放工作区共享的 Rust 库（crates）。命名采用 kebab-case，并以 `wp-` 作为前缀统一领域归属；第三方/上游组件保留其原名。二进制应用位于 `apps/`，通常通过在 Cargo.toml 中添加 `package = "…"` 的方式引用这些库（保持现有 crate id 不变）。
 
-- 依赖约定：语言/解析相关在 `wp-lang`、`wp-condition`、`wp-oml`；其中 `wp-primitives` 已独立发布，不再位于本目录。数据/类型在 `wp-data-utils`；错误在 `wp-error`；日志在 `wp-log`（基于 log/log4rs 封装）；配置在 `wp-config`；控制面在 `wp-ctrl-api`；I/O 接口在 `wp-source-api`、`wp-sink-api`；统计在 `wp-stats`；CLI 共用工具在 `wp-cli-utils`；通用设施在 `wp-common`。
+- 依赖约定：语言/解析相关在 `wp-condition`、`wp-oml`；其中 `wp-primitives`、`wp-lang` 已独立发布，不再位于本目录。数据/类型在 `wp-data-utils`；错误在 `wp-error`；日志在 `wp-log`（基于 log/log4rs 封装）；配置在 `wp-config`；控制面在 `wp-ctrl-api`；I/O 接口在 `wp-source-api`、`wp-sink-api`；统计在 `wp-stats`；CLI 共用工具在 `wp-cli-utils`；通用设施在 `wp-common`。
 - Feature 约定：Kafka 聚合开关使用 `kafka`；插件/商业能力在根工程聚合（见根 Cargo.toml 的 `features`）。
 
 ## 各 crate 简述
@@ -37,9 +37,6 @@
 - `wp-knowledge`
   - 知识库/词典：内存/SQLite（`rusqlite` + `r2d2`），统一查询接口与序列化支持。
 
-- `wp-lang`
-  - Warp DSL：AST、解析器、执行引擎（VM/runtime）、内建函数、生成器等；对外暴露 `DataPacket` 等核心类型。
-
 - `wp-log`
 - 日志配置与宏封装（`wp-log` 基于 log/log4rs）；提供域宏（`info_ctrl!` 等）与初始化 `wp_log::conf::log_init`；文件日志默认 10MB/10 份滚动（gzip）。
 
@@ -68,7 +65,7 @@
 ```
 [dependencies]
 wp_conf = { package = "wp-config", path = "crates/wp-config" }
-wpl     = { package = "wp-lang",   path = "crates/wp-lang" }
+wpl     = { package = "wp-lang",   version = "0.1.0" }
 wp-model-core  = { package = "wp-data-utils", path = "crates/wp-data-utils" }
 wp_err  = { package = "wp-error",   path = "crates/wp-error" }
 ```

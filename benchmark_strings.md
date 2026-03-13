@@ -61,7 +61,7 @@ let name: SmolStr = "ip".into();  // 运行时优化
 
 ```bash
 # 运行性能测试
-cd crates/wp-lang
+cd ../wp-lang
 cargo add smol_str --dev
 cargo bench --bench string_perf
 ```

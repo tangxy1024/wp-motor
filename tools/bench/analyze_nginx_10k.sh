@@ -2,12 +2,13 @@
 set -euo pipefail
 
 # Analyze WPL nginx parser performance over N lines with Criterion.
-# - Runs: cargo bench -p wp-lang --bench nginx_10k
+# - Runs the standalone wp-lang repository benchmark.
 # - Prints: full/no_time/epoch mean time and throughput; time/rfc overheads.
 #
 # Env:
 #   WF_BENCH_LINES   Number of lines to benchmark (default: 10000)
 #   OPEN_REPORT=1    Open HTML report after run (macOS: open; Linux: xdg-open)
+#   WP_LANG_DIR      Standalone wp-lang checkout (default: ../wp-lang)
 # Args:
 #   baseline name (optional, default: run1)
 
@@ -15,26 +16,32 @@ LINES="${WF_BENCH_LINES:-10000}"
 BASELINE="${1:-run1}"
 PKG=wp-lang
 BENCH=nginx_10k
+WP_LANG_DIR="${WP_LANG_DIR:-../wp-lang}"
 
-echo "[bench] Running Criterion: ${PKG}/${BENCH} (lines=${LINES})"
+if [[ ! -d "${WP_LANG_DIR}" ]]; then
+  echo "[error] standalone wp-lang repo not found: ${WP_LANG_DIR}" >&2
+  echo "[hint] clone https://github.com/wp-labs/wp-lang and set WP_LANG_DIR" >&2
+  exit 1
+fi
+
+echo "[bench] Running Criterion: ${PKG}/${BENCH} (lines=${LINES}, repo=${WP_LANG_DIR})"
 # Optional clean to avoid reading regression diffs (change/estimates.json)
 if [[ "${CLEAR:-}" == "1" ]]; then
-  rm -rf target/criterion/${BENCH} 2>/dev/null || true
-  rm -rf crates/wp-lang/target/criterion/${BENCH} 2>/dev/null || true
+  rm -rf "${WP_LANG_DIR}/target/criterion/${BENCH}" 2>/dev/null || true
 fi
 # If sccache is blocked by sandbox (macOS seatbelt), allow opt-out via env or auto-disable here.
 if [[ "${SCCACHE_DISABLE:-}" != "1" ]] && [[ "${RUSTC_WRAPPER:-}" == *sccache* ]]; then
   echo "[info] Detected sccache in RUSTC_WRAPPER, temporarily disabling for bench run"
-  SCCACHE_DISABLE=1 RUSTC_WRAPPER= WF_BENCH_LINES="${LINES}" cargo bench -p "${PKG}" --bench "${BENCH}"
+  (cd "${WP_LANG_DIR}" && SCCACHE_DISABLE=1 RUSTC_WRAPPER= WF_BENCH_LINES="${LINES}" cargo bench --bench "${BENCH}")
 else
-  WF_BENCH_LINES="${LINES}" cargo bench -p "${PKG}" --bench "${BENCH}"
+  (cd "${WP_LANG_DIR}" && WF_BENCH_LINES="${LINES}" cargo bench --bench "${BENCH}")
 fi
 
-# Locate criterion output (workspace root or crate-local)
+# Locate criterion output
 BASE_DIR=""
-for cdir in "crates/wp-lang/target/criterion" "target/criterion"; do
-  if [[ -d "${cdir}/${BENCH}" ]]; then BASE_DIR="${cdir}/${BENCH}"; break; fi
-done
+if [[ -d "${WP_LANG_DIR}/target/criterion/${BENCH}" ]]; then
+  BASE_DIR="${WP_LANG_DIR}/target/criterion/${BENCH}"
+fi
 if [[ -z "${BASE_DIR}" ]]; then
   echo "[error] Criterion output not found for ${BENCH}" >&2
   exit 1
@@ -84,8 +91,8 @@ for name in ('full', 'full_clf', 'no_time', 'epoch'):
 def rust_unescape(s: str) -> str:
     return s.replace('\\"', '"').replace('\\\\', '\\')
 
-# Derive bytes/line from bench sample (crates/wp-lang/benches/nginx_10k.rs)
-bench_rs = os.path.join('crates', 'wp-lang', 'benches', 'nginx_10k.rs')
+# Derive bytes/line from the standalone wp-lang benchmark sample
+bench_rs = os.path.join(os.environ.get('WP_LANG_DIR', '../wp-lang'), 'benches', 'nginx_10k.rs')
 try:
     with open(bench_rs, 'r', encoding='utf-8') as f:
         content = f.read()

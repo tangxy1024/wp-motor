@@ -269,7 +269,7 @@ rule json_payload {
 }
 "#;
 
-    // 日志与规则样例来源于 crates/wp-lang 的 bench/test 数据
+    // 日志与规则样例来源于独立 wp-lang 仓库的 bench/test 数据
     const NGINX_SAMPLE: &str = r#"222.133.52.20 - - [06/Aug/2019:12:12:19 +0800] "GET /nginx-logo.png HTTP/1.1" 200 368 "http://119.122.1.4/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36" "-""#;
     const JSON_SAMPLE: &str = r#"{ "data": "192.168.1.1" }"#;
 

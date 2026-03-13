@@ -166,7 +166,7 @@ wp_knowledge = { package = "wp-knowledge", path = "crates/wp-knowledge" }
 
 # --- Internal: Language & Parsing ---
 wp_primitives = { workspace = true }
-wpl = { package = "wp-lang", version = "0.1.0" }
+wpl = { package = "wp-lang", version = "0.1" }
 oml = { package = "wp-oml", path = "crates/wp-oml", features = ["oml-diag"] }
 
 # --- Internal: Data & Stats ---
@@ -388,7 +388,7 @@ wp_cli_core = { package = "wp-cli-core", path = "./crates/wp-cli-core" }
 wp_config = { package = "wp-config", path = "./crates/wp-config" }
 wp_data_model = { package = "wp-data-utils", path = "./crates/wp-data-utils" }
 wp_knowledge = { package = "wp-knowledge", path = "./crates/wp-knowledge" }
-wp_lang = { package = "wp-lang", version = "0.1.0" }
+wp_lang = { package = "wp-lang", version = "0.1" }
 wp_oml = { package = "wp-oml", path = "./crates/wp-oml" }
 wp_proj = { package = "wp-proj", path = "./crates/wp-proj" }
 wp_stats = { package = "wp-stats", path = "./crates/wp-stats" }

@@ -19,7 +19,7 @@ use wp_data_model::cache::FieldQueryCache;
 use wp_model_core::model::fmt_def::TextFmt;
 use wp_model_core::model::{DataField, DataRecord, Value};
 use wp_model_core::raw::RawData;
-use wp_parser::Parser;
+use wp_primitives::Parser;
 use wpl::{WplEvaluator, wpl_express};
 
 const NGINX_SAMPLE: &str = include_str!("../../../../tests/sample/nginx/sample.dat");

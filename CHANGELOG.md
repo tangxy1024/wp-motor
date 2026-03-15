@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.19.4] - 2026-03-15
+## [1.19.5] - 2026-03-15
 
 ### Added
 - **Runtime Control**: Add a structured in-process runtime command bus for `LoadModel`, including `oneshot` replies, reload single-flight gating, and runtime status snapshots for host-layer management integration

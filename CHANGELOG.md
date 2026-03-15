@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.19.3 Unreleased]
+## [1.19.4] - 2026-03-15
 
 ### Added
 - **Runtime Control**: Add a structured in-process runtime command bus for `LoadModel`, including `oneshot` replies, reload single-flight gating, and runtime status snapshots for host-layer management integration
@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation**: Clarify the remote reload boundary so admin HTTP lives in `warp-parse`, while `wp-motor` only owns runtime command execution and status reporting
 - **Dependencies/Knowledge**: Switch workspace consumers to external `wp-knowledge 0.10`, remove the local `crates/wp-knowledge` mirror, and align OML/routing cache usage with the external crate types
 - **Dependencies/Language**: Record `wp-lang` as an externalized dependency track instead of continuing to maintain a local in-workspace mirror
+
+### Fixed
+- **Batch Runtime**: Disconnect the parse router before batch shutdown waits on parser completion so file-source EOF can drain remaining data and exit instead of hanging in `Quiescing`
 
 ## [1.19.0] - 2026-03-10
 

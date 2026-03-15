@@ -151,6 +151,9 @@ impl EngineRuntime {
         mut self,
         policy_kind: crate::runtime::actor::ExitPolicyKind,
     ) -> RunResult<()> {
+        if matches!(policy_kind, crate::runtime::actor::ExitPolicyKind::Batch) {
+            self.disconnect_parse_router();
+        }
         self.task_manager.all_down_wait_policy(policy_kind).await
     }
 
@@ -159,6 +162,9 @@ impl EngineRuntime {
         policy_kind: crate::runtime::actor::ExitPolicyKind,
         initial_signal_received: bool,
     ) -> RunResult<()> {
+        if matches!(policy_kind, crate::runtime::actor::ExitPolicyKind::Batch) {
+            self.disconnect_parse_router();
+        }
         self.task_manager
             .all_down_wait_policy_with_signal(policy_kind, initial_signal_received)
             .await
@@ -302,6 +308,7 @@ mod tests {
     use super::*;
     use crate::runtime::actor::ExitPolicyKind;
     use crate::runtime::actor::command::{ActorCtrlCmd, TaskScope};
+    use crate::runtime::actor::exit_policy::ExitAction;
     use std::sync::{Arc, Mutex};
     use tokio::sync::mpsc;
     use wp_connector_api::{SourceBatch, SourceEvent, Tags};
@@ -486,5 +493,69 @@ mod tests {
             .all_down_force_policy(ExitPolicyKind::Batch)
             .await
             .expect("shutdown runtime");
+    }
+
+    #[tokio::test]
+    async fn batch_shutdown_disconnects_parse_router_before_waiting_for_parser() {
+        let (mon_tx, _mon_rx) = mpsc::channel(8);
+
+        let (parser_group, parser_sender) = make_parser_group("batch-parser", None);
+        let processing = ProcessingTaskSet {
+            parser_senders: vec![parser_sender],
+            parser_group,
+            infra_group: make_auto_finish_group("batch-infra", 20),
+            sink_group: Some(make_auto_finish_group("batch-sink", 20)),
+            maint_group: make_stop_only_group("batch-maint"),
+        };
+
+        let mut task_manager = TaskManager::default();
+        let parse_router = ParseDispatchRouter::new(processing.parser_senders());
+        processing.install(&mut task_manager);
+        task_manager
+            .append_group_with_role(TaskRole::Picker, make_auto_finish_group("batch-picker", 20));
+
+        let mut runtime = EngineRuntime::new(task_manager, parse_router, mon_tx);
+        runtime.disconnect_parse_router();
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let running_action = runtime
+            .task_manager_mut()
+            .next_exit_policy_action(
+                ExitPolicyKind::Batch,
+                crate::runtime::actor::exit_policy::ExitPhase::Running,
+                Instant::now(),
+                false,
+            )
+            .expect("running phase action");
+        assert!(
+            matches!(running_action, ExitAction::EnterQuiescing(_)),
+            "batch policy should enter quiescing once picker finishes, got {running_action:?}"
+        );
+
+        let quiescing_action = runtime
+            .task_manager_mut()
+            .next_exit_policy_action(
+                ExitPolicyKind::Batch,
+                crate::runtime::actor::exit_policy::ExitPhase::Quiescing,
+                Instant::now(),
+                false,
+            )
+            .expect("quiescing phase action");
+        assert!(
+            matches!(quiescing_action, ExitAction::EnterStopping(_)),
+            "batch policy should stop once parser finishes, got {quiescing_action:?}"
+        );
+
+        let res = tokio::time::timeout(
+            Duration::from_secs(5),
+            runtime.shutdown(ExitPolicyKind::Batch),
+        )
+        .await;
+
+        assert!(
+            res.is_ok(),
+            "batch shutdown should complete once router-held parser senders are disconnected"
+        );
+        res.unwrap().expect("batch shutdown should succeed");
     }
 }

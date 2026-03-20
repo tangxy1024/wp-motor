@@ -47,3 +47,20 @@ target = "*"
 - `[models].knowledge` 是知识配置根目录，默认值为 `./models/knowledge`
 - `semantic_dict.toml` 默认读取 `${models.knowledge}/semantic_dict.toml`
 - `knowdb.toml` 默认读取 `${models.knowledge}/knowdb.toml`
+
+## 变量化建议
+
+`wparse.toml` 中的路径类字符串适合使用 `${VAR}` 变量化，例如：
+
+```toml
+[models]
+knowledge = "${WORK_ROOT}/models/knowledge"
+
+[rescue]
+path = "${WORK_ROOT}/data/rescue"
+
+[log_conf.file]
+path = "${WORK_ROOT}/data/logs"
+```
+
+涉及外部变量文件、敏感值和 `sec_key.toml` 约定时，参考：[配置变量与安全字典（`${VAR}` / `sec_key.toml`）](08-variables_and_sec_key.md)。

@@ -211,10 +211,10 @@ mod tests {
 
     #[test]
     fn file_source_sets_expected_fields() {
-        let item = source_builders::file_source("file_1", "gen.dat");
+        let item = source_builders::file_source("file_1", "gen*.dat");
         assert_eq!(item.key, "file_1");
         assert_eq!(item.connect, "file_src");
-        assert_eq!(item.params.get("file").unwrap().as_str(), Some("gen.dat"));
+        assert_eq!(item.params.get("file").unwrap().as_str(), Some("gen*.dat"));
     }
 
     #[test]

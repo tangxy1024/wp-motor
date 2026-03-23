@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.19.6] - 2026-03-23
+## [1.19.7] - 2026-03-23
 
 ### Added
 - **Runtime/Reload Timeout**: Add explicit `reload_timeout_ms` runtime parameter, available from CLI `--reload-timeout-ms` and `wparse.toml` `[performance].reload_timeout_ms`
@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Source/File Unified Config**: Align unified source config tests and helper builders with the runtime-only `base + file` contract so file connectors no longer emit legacy `path` params
 - **Connectors/Sources**: Migrate the built-in `file`, `syslog`, and `tcp` source connector implementations into `wp-core-connectors`; `wp-motor` now keeps compatibility re-export modules and runtime registration glue only
 - **Dependencies/Connectors**: Switch `wp-motor` back to the published `wp-core-connectors 0.1.2` release after the source-connector migration, instead of relying on a local path override
+- **wp-proj/init Demo**: Change the generated `topology/sources/wpsrc.toml` file override from `gen.dat` to `gen*.dat` so the demo source matches both single-file wpgen output and parallel shard files like `gen-r0.dat`
 
 ### Fixed
 - **Runtime/Reload**: Count parser/sink/infra drain targets from actual started workers and add bounded tail cleanup for detached old processing so reload does not wait indefinitely on stale tasks

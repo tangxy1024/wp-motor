@@ -50,6 +50,16 @@ impl WarpProject {
     fn build(work_root: &Path, dict: &orion_variate::EnvDict) -> Self {
         let abs_root = normalize_work_root(work_root);
         let paths = ProjectPaths::from_root(&abs_root);
+        std::fs::create_dir_all(&abs_root).unwrap_or_else(|err| {
+            panic!("create work root failed {}: {}", abs_root.display(), err)
+        });
+        std::fs::create_dir_all(&paths.conf_dir).unwrap_or_else(|err| {
+            panic!(
+                "create conf dir failed {}: {}",
+                paths.conf_dir.display(),
+                err
+            )
+        });
         let eng_conf = Arc::new(
             EngineConfig::load_or_init(&abs_root, dict)
                 .expect("load engine config")

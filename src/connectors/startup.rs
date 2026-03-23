@@ -8,9 +8,9 @@ pub fn init_runtime_registries() {
     wp_core_connectors::startup::init_runtime_registries(
         crate::sinks::register_builtin_factories,
         || {
-            crate::sources::syslog::register_syslog_factory();
-            crate::sources::tcp::register_tcp_factory();
-            crate::sources::file::register_factory_only();
+            wp_core_connectors::sources::syslog::register_syslog_factory();
+            wp_core_connectors::sources::tcp::register_tcp_factory();
+            wp_core_connectors::sources::file::register_factory_only();
         },
     );
 }

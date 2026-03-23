@@ -23,8 +23,14 @@ const MODELS_KNOWLEDGE_EXAMPLE_DIR: &str = "models/knowledge/example";
 const SEMANTIC_DICT_FILE: &str = "models/knowledge/semantic_dict.toml";
 const TOPOLOGY_SOURCES_DIR: &str = "topology/sources";
 const TOPOLOGY_SINKS_DIR: &str = "topology/sinks";
-const ADMIN_API_TOKEN_FILE: &str = "runtime/admin_api.token";
-const DEFAULT_ADMIN_API_BLOCK: &str = r#"
+const ADMIN_API_TOKEN_ENV_REF: &str = "${HOME}/.warp_parse/admin_api.token";
+const ADMIN_API_TOKEN_FALLBACK_FILE: &str = "runtime/admin_api.token";
+const ADMIN_API_TOKEN_HOME_DIR: &str = ".warp_parse";
+const ADMIN_API_TOKEN_NAME: &str = "admin_api.token";
+
+fn default_admin_api_block() -> String {
+    format!(
+        r#"
 [admin_api]
 enabled = false
 bind = "127.0.0.1:19090"
@@ -38,8 +44,20 @@ key_file = ""
 
 [admin_api.auth]
 mode = "bearer_token"
-token_file = "runtime/admin_api.token"
-"#;
+token_file = "{ADMIN_API_TOKEN_ENV_REF}"
+"#
+    )
+}
+
+fn resolve_admin_api_token_path(work_root: &Path) -> PathBuf {
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .map(|home| {
+            home.join(ADMIN_API_TOKEN_HOME_DIR)
+                .join(ADMIN_API_TOKEN_NAME)
+        })
+        .unwrap_or_else(|| work_root.join(ADMIN_API_TOKEN_FALLBACK_FILE))
+}
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum PrjScope {
@@ -196,7 +214,7 @@ impl WarpProject {
         use std::fs;
 
         let work_root = work_root.as_ref();
-        let token_path = work_root.join(ADMIN_API_TOKEN_FILE);
+        let token_path = resolve_admin_api_token_path(work_root);
         if token_path.exists() {
             return Ok(());
         }
@@ -281,7 +299,7 @@ impl WarpProject {
         if !conf.ends_with('\n') {
             conf.push('\n');
         }
-        conf.push_str(DEFAULT_ADMIN_API_BLOCK);
+        conf.push_str(&default_admin_api_block());
         std::fs::write(config_path, conf).owe_conf()?;
         Ok(())
     }
@@ -350,6 +368,7 @@ impl WarpProject {
 mod tests {
     use super::*;
     use std::path::Path;
+    use std::sync::{Mutex, OnceLock};
     use wp_conf::test_support::ForTest;
     const CONNECTORS_DIR: &str = "connectors";
     const CONNECTORS_SOURCE_DIR: &str = "connectors/source.d";
@@ -362,6 +381,38 @@ mod tests {
     const MODELS_OML_EXAMPLE_FILE: &str = "models/oml/example.oml";
     const MODELS_OML_KNOWDB_FILE: &str = "models/oml/knowdb.toml";
     const TOPOLOGY_WPSRC_FILE: &str = "topology/sources/wpsrc.toml";
+
+    fn admin_api_home_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct HomeOverride {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl HomeOverride {
+        fn new(home: &Path) -> Self {
+            let original = std::env::var_os("HOME");
+            unsafe {
+                std::env::set_var("HOME", home);
+            }
+            Self { original }
+        }
+    }
+
+    impl Drop for HomeOverride {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(home) => unsafe {
+                    std::env::set_var("HOME", home);
+                },
+                None => unsafe {
+                    std::env::remove_var("HOME");
+                },
+            }
+        }
+    }
 
     fn connector_template_exists<P: AsRef<std::path::Path>>(dir: P, id: &str) -> bool {
         let suffix = format!("-{}.toml", id);
@@ -457,6 +508,8 @@ mod tests {
         // 创建临时目录
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let work_root = temp_dir.path();
+        let _guard = admin_api_home_lock().lock().expect("lock HOME override");
+        let _home = HomeOverride::new(work_root);
 
         // 创建项目并使用 Full 模式初始化
         WarpProject::init(work_root, PrjScope::Full, &EnvDict::test_default())
@@ -479,8 +532,8 @@ mod tests {
             std::fs::read_to_string(work_root.join(CONF_WPARSE_FILE)).expect("read wparse.toml");
         assert!(wparse_conf.contains("[admin_api]"));
         assert!(wparse_conf.contains("enabled = false"));
-        assert!(wparse_conf.contains("token_file = \"runtime/admin_api.token\""));
-        let token_path = work_root.join(ADMIN_API_TOKEN_FILE);
+        assert!(wparse_conf.contains(&format!("token_file = \"{}\"", ADMIN_API_TOKEN_ENV_REF)));
+        let token_path = resolve_admin_api_token_path(work_root);
         assert!(token_path.exists(), "admin API token file should exist");
         let token = std::fs::read_to_string(&token_path).expect("read admin API token");
         assert!(
@@ -727,10 +780,12 @@ mod tests {
 
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let work_root = temp_dir.path();
+        let _guard = admin_api_home_lock().lock().expect("lock HOME override");
+        let _home = HomeOverride::new(work_root);
 
         WarpProject::init_admin_api_token(work_root).expect("create admin API token");
 
-        let token_path = work_root.join(ADMIN_API_TOKEN_FILE);
+        let token_path = resolve_admin_api_token_path(work_root);
         assert!(token_path.exists());
         let token = std::fs::read_to_string(&token_path).expect("read admin API token");
         assert!(!token.trim().is_empty());
@@ -746,6 +801,27 @@ mod tests {
                 & 0o777;
             assert_eq!(mode, 0o600);
         }
+    }
+
+    #[test]
+    fn test_init_admin_api_token_keeps_existing_token() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let work_root = temp_dir.path();
+        let _guard = admin_api_home_lock().lock().expect("lock HOME override");
+        let _home = HomeOverride::new(work_root);
+
+        let token_path = resolve_admin_api_token_path(work_root);
+        if let Some(parent) = token_path.parent() {
+            std::fs::create_dir_all(parent).expect("create token parent");
+        }
+        std::fs::write(&token_path, "existing-token\n").expect("seed existing token");
+
+        WarpProject::init_admin_api_token(work_root).expect("reuse existing admin API token");
+
+        let token = std::fs::read_to_string(&token_path).expect("read admin API token");
+        assert_eq!(token, "existing-token\n");
     }
 
     #[test]
@@ -766,6 +842,7 @@ mod tests {
         let conf = std::fs::read_to_string(conf_path).expect("read wparse.toml");
         assert_eq!(conf.matches("[admin_api]").count(), 1);
         assert!(conf.contains("bind = \"127.0.0.1:19090\""));
+        assert!(conf.contains(&format!("token_file = \"{}\"", ADMIN_API_TOKEN_ENV_REF)));
     }
 
     #[test]

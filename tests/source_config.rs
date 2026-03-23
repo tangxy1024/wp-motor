@@ -98,7 +98,6 @@ fn create_temp_file_in_path(path: &Path, filename: &str, content: &str) -> PathB
 /// Builder for file connector configurations
 struct FileConnectorBuilder {
     id: String,
-    path: Option<String>,
     base: Option<String>,
     file: Option<String>,
     encode: String,
@@ -109,16 +108,27 @@ impl FileConnectorBuilder {
     fn new(id: &str) -> Self {
         Self {
             id: id.to_string(),
-            path: None,
             base: None,
             file: None,
             encode: "text".to_string(),
-            allow_override: vec!["path".to_string(), "encode".to_string()],
+            allow_override: vec!["base".to_string(), "file".to_string(), "encode".to_string()],
         }
     }
 
     fn with_path(mut self, path: &str) -> Self {
-        self.path = Some(path.to_string());
+        let path = Path::new(path);
+        self.base = Some(
+            path.parent()
+                .unwrap_or_else(|| Path::new("."))
+                .display()
+                .to_string(),
+        );
+        self.file = Some(
+            path.file_name()
+                .expect("file connector path must include a file name")
+                .to_string_lossy()
+                .into_owned(),
+        );
         self
     }
 
@@ -152,10 +162,6 @@ allow_override = ["{}"]
         ));
 
         config.push_str("[connectors.params]\n");
-
-        if let Some(path) = self.path {
-            config.push_str(&format!("path = \"{}\"\n", path));
-        }
 
         if let Some(base) = self.base {
             config.push_str(&format!("base = \"{}\"\n", base));
@@ -513,10 +519,10 @@ async fn unified_config_enforces_parameter_override_whitelist() {
     // Create test file
     let test_file = create_test_file(TEST_WHITELIST_FILE, DEFAULT_FILE_CONTENT);
 
-    // Build connector that only allows "path" override
+    // Build connector that only allows file location overrides
     let connector_builder = FileConnectorBuilder::new(FILE_CONNECTOR_ID)
         .with_path(&test_file.display().to_string())
-        .with_allowed_overrides(vec!["path"]); // Note: "encode" is NOT in whitelist
+        .with_allowed_overrides(vec!["base", "file"]); // Note: "encode" is NOT in whitelist
 
     // Build source that tries to override "encode" parameter
     let source_builder =

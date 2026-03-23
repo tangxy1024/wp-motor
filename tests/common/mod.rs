@@ -71,8 +71,26 @@ impl FileSourceBuilder {
     }
 
     pub fn build(self) -> ResolvedSourceSpec {
+        let path = std::path::Path::new(&self.path);
         let mut params = TomlMap::new();
-        params.insert("path".to_string(), toml::Value::String(self.path));
+        params.insert(
+            "base".to_string(),
+            toml::Value::String(
+                path.parent()
+                    .unwrap_or_else(|| std::path::Path::new("."))
+                    .display()
+                    .to_string(),
+            ),
+        );
+        params.insert(
+            "file".to_string(),
+            toml::Value::String(
+                path.file_name()
+                    .expect("file source path must include a file name")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+        );
         params.insert(
             "encode".to_string(),
             toml::Value::String("text".to_string()),

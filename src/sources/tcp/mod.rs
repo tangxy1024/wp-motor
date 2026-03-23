@@ -6,26 +6,43 @@
 //! - factory.rs：参数解析与 TcpSourceFactory
 //! - zc_types.rs：零拷贝数据结构
 
-use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+pub mod acceptor {
+    pub use wp_core_connectors::sources::tcp::acceptor::*;
+}
 
-pub mod acceptor;
-mod config;
-pub mod conn;
-pub mod factory;
-pub mod framing;
-pub mod source;
-pub mod worker;
-pub mod zc;
-pub use acceptor::TcpAcceptor;
-pub use factory::{TcpSourceFactory, register_tcp_factory};
-pub use framing::FramingMode;
-pub use source::TcpSource;
+pub mod config {
+    pub use wp_core_connectors::sources::tcp::config::*;
+}
 
-// 零拷贝类型导出
-pub use zc::types::{
-    BatchConfig, BufferPoolMetrics, BufferStats, MessageBatch, ZcpConfig, ZcpMessage, ZcpResult,
-    ZeroCopyError,
+pub mod conn {
+    pub mod connection {
+        pub use wp_core_connectors::sources::tcp::conn::connection::*;
+    }
+}
+
+pub mod factory {
+    pub use wp_core_connectors::sources::tcp::factory::*;
+}
+
+pub mod framing {
+    pub use wp_core_connectors::sources::tcp::framing::*;
+}
+
+pub mod source {
+    pub use wp_core_connectors::sources::tcp::source::*;
+}
+
+pub mod worker {
+    pub use wp_core_connectors::sources::tcp::worker::*;
+}
+
+pub mod zc {
+    pub mod types {
+        pub use wp_core_connectors::sources::tcp::zc::types::*;
+    }
+}
+
+pub use wp_core_connectors::sources::tcp::{
+    BatchConfig, BufferPoolMetrics, BufferStats, FramingMode, MessageBatch, TcpAcceptor, TcpSource,
+    TcpSourceFactory, ZcpConfig, ZcpMessage, ZcpResult, ZeroCopyError, register_tcp_factory,
 };
-
-pub(crate) type ConnectionRegistry = Arc<Mutex<HashSet<u64>>>;

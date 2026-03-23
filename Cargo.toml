@@ -54,7 +54,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.19.4"
+version = "1.19.6" # @gxl:set(version)
 edition = "2024"
 license = "Apache-2.0"
 
@@ -209,6 +209,7 @@ httpmock = "0.8"
 collection_literals = "1.0"
 criterion = { workspace = true }
 tempfile = "3.23"
+wp_proj = { workspace = true }
 
 # ============================================================================
 # Feature Flags

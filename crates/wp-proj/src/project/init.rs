@@ -179,23 +179,14 @@ impl WarpProject {
 
     /// 初始化 wpgen 配置文件
     fn init_wpgen_config<P: AsRef<Path>>(work_root: P) -> RunResult<()> {
-        use std::fs;
-
         let work_root = work_root.as_ref();
         let conf_dir = work_root.join(CONF_DIR);
-        if let Err(_) = fs::create_dir_all(&conf_dir) {
-            // 如果创建目录失败，记录警告但继续
-            eprintln!("Warning: Failed to create conf directory");
-        }
+        ErrorHandler::safe_create_dir(&conf_dir)?;
 
         let wpgen_config_path = work_root.join(CONF_WPGEN_FILE);
         if !wpgen_config_path.exists() {
-            // 使用 include_str! 读取示例配置文件
             let wpgen_config_content = include_str!("../example/conf/wpgen.toml");
-            if let Err(_) = fs::write(&wpgen_config_path, wpgen_config_content) {
-                // 如果写入失败，记录警告但继续
-                eprintln!("Warning: Failed to write wpgen.toml");
-            }
+            ErrorHandler::safe_write_file(&wpgen_config_path, wpgen_config_content)?;
         }
 
         Ok(())
@@ -210,9 +201,7 @@ impl WarpProject {
             return Ok(());
         }
         if let Some(parent) = token_path.parent() {
-            if let Err(_) = fs::create_dir_all(parent) {
-                eprintln!("Warning: Failed to create runtime directory for admin API token");
-            }
+            ErrorHandler::safe_create_dir(parent)?;
         }
 
         let now = std::time::SystemTime::now()
@@ -241,26 +230,18 @@ impl WarpProject {
 
     /// 初始化语义词典配置文件
     fn init_semantic_dict_config<P: AsRef<Path>>(work_root: P) -> RunResult<()> {
-        use std::fs;
-
         let work_root = work_root.as_ref();
         let knowledge_dir = work_root.join(MODELS_KNOWLEDGE_DIR);
-        if let Err(_) = fs::create_dir_all(&knowledge_dir) {
-            eprintln!("Warning: Failed to create knowledge directory");
-        }
+        ErrorHandler::safe_create_dir(&knowledge_dir)?;
 
         let semantic_dict_config_path = work_root.join(SEMANTIC_DICT_FILE);
         if !semantic_dict_config_path.exists() {
-            // 从 wp-oml 获取默认配置内容
             let config_content = oml::generate_default_semantic_dict_config();
-            if let Err(e) = fs::write(&semantic_dict_config_path, config_content) {
-                eprintln!("Warning: Failed to write semantic_dict.toml: {}", e);
-            } else {
-                println!(
-                    "✓ 语义词典配置文件已创建: {}",
-                    semantic_dict_config_path.display()
-                );
-            }
+            ErrorHandler::safe_write_file(&semantic_dict_config_path, &config_content)?;
+            println!(
+                "✓ 语义词典配置文件已创建: {}",
+                semantic_dict_config_path.display()
+            );
         }
 
         Ok(())
@@ -268,19 +249,17 @@ impl WarpProject {
 
     /// 初始化 wparse 主配置（wparse.toml）
     fn init_engine_config<P: AsRef<Path>>(work_root: P, dict: &EnvDict) -> RunResult<EngineConfig> {
-        use std::fs;
-
         let work_root = work_root.as_ref();
         let abs_root = normalize_work_root(work_root);
         let conf_dir = abs_root.join(CONF_DIR);
-        if let Err(_) = fs::create_dir_all(&conf_dir) {
-            eprintln!("Warning: Failed to create conf directory");
-        }
+        ErrorHandler::safe_create_dir(&conf_dir)?;
 
         let engine_config_path = abs_root.join(CONF_WPARSE_FILE);
         if !engine_config_path.exists() {
-            // 使用 EngineConfig::init() 生成配置并保存
             let conf = EngineConfig::init(&abs_root);
+            if let Some(parent) = engine_config_path.parent() {
+                ErrorHandler::safe_create_dir(parent)?;
+            }
             conf.save_toml(&engine_config_path).owe_conf()?;
         }
         // `WarpProject::build()` may have already materialized wparse.toml via
@@ -349,10 +328,10 @@ impl WarpProject {
             ErrorHandler::safe_create_dir(&work_root.join(TOPOLOGY_SOURCES_DIR))?;
             ErrorHandler::safe_create_dir(&work_root.join(TOPOLOGY_SINKS_DIR))?;
         }
-        ErrorHandler::safe_create_dir(&Self::resolve_with_root(&work_root, SRC_FILE_PATH))?;
-        ErrorHandler::safe_create_dir(&Self::resolve_with_root(&work_root, OUT_FILE_PATH))?;
-        ErrorHandler::safe_create_dir(&Self::resolve_with_root(&work_root, WPARSE_LOG_PATH))?;
-        ErrorHandler::safe_create_dir(&Self::resolve_with_root(&work_root, RESCURE_FILE_PATH))?;
+        ErrorHandler::safe_create_dir(&Self::resolve_with_root(work_root, SRC_FILE_PATH))?;
+        ErrorHandler::safe_create_dir(&Self::resolve_with_root(work_root, OUT_FILE_PATH))?;
+        ErrorHandler::safe_create_dir(&Self::resolve_with_root(work_root, WPARSE_LOG_PATH))?;
+        ErrorHandler::safe_create_dir(&Self::resolve_with_root(work_root, RESCURE_FILE_PATH))?;
         Ok(())
     }
 

@@ -13,10 +13,10 @@ fn kind_hint_from_filename_path(p: &Path) -> Option<String> {
     if parts.len() >= 2 {
         let raw = parts[1];
         let mut iter = raw.split('_');
-        if let Some(first) = iter.next() {
-            if !first.is_empty() {
-                return Some(first.to_string());
-            }
+        if let Some(first) = iter.next()
+            && !first.is_empty()
+        {
+            return Some(first.to_string());
         }
     }
     None
@@ -80,11 +80,11 @@ fn validate_connector(
                 sev = sev_max(sev, LintSeverity::Warn);
                 msg.push_str("file sources id should start with 'file_'; ");
             }
-            if let Some(h) = hint {
-                if !hint_kind_compatible(h, &kind) {
-                    sev = sev_max(sev, LintSeverity::Warn);
-                    msg.push_str(&format!("filename kind hint '{}' != type '{}'", h, kind));
-                }
+            if let Some(h) = hint
+                && !hint_kind_compatible(h, &kind)
+            {
+                sev = sev_max(sev, LintSeverity::Warn);
+                msg.push_str(&format!("filename kind hint '{}' != type '{}'", h, kind));
             }
         }
         Side::Sinks => {
@@ -100,11 +100,11 @@ fn validate_connector(
                     first_err = Some(SilentErrKind::SinksIdMustEndSink);
                 }
             }
-            if let Some(h) = hint {
-                if h != kind {
-                    sev = sev_max(sev, LintSeverity::Warn);
-                    msg.push_str(&format!("filename kind hint '{}' != type '{}'", h, kind));
-                }
+            if let Some(h) = hint
+                && h != kind
+            {
+                sev = sev_max(sev, LintSeverity::Warn);
+                msg.push_str(&format!("filename kind hint '{}' != type '{}'", h, kind));
             }
         }
     }

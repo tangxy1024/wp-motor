@@ -2,9 +2,11 @@ use orion_error::OperationContext;
 
 use crate::knowledge::KnowdbHandler;
 use crate::runtime::actor::TaskGroup;
+use crate::runtime::actor::TaskRole;
 use crate::runtime::actor::signal::ShutdownCmd;
+use crate::runtime::reload_drain::ReloadDrainBus;
 
-use crate::runtime::sink::act_sink::{InfraGroups, SinkService, SinkWork};
+use crate::runtime::sink::act_sink::{InfraGroups, SinkProcCtx, SinkService, SinkWork};
 use crate::runtime::sink::infrastructure::InfraSinkService;
 use crate::runtime::supervisor::maintenance::ActMaintainer;
 use crate::sinks::InfraSinkAgent;
@@ -17,6 +19,7 @@ pub fn start_data_sinks(
     mon_send: MonSend,
     act_mt_sink: &mut ActMaintainer,
     knowdb: Option<Arc<KnowdbHandler>>,
+    drain_bus: &ReloadDrainBus,
 ) -> TaskGroup {
     let mut ctx = OperationContext::want("start-data-sinks").with_auto_log();
     let mut routine_group = TaskGroup::new("oml-sink", ShutdownCmd::Timeout(200));
@@ -32,6 +35,7 @@ pub fn start_data_sinks(
         let batch_timeout_ms = x.conf().batch_timeout_ms();
         let batch_size = x.conf().batch_size();
         let knowdb_for_task = knowdb_handler.clone();
+        let sink_drain_reporter = drain_bus.reporter(TaskRole::Sink, sink_name.clone());
         let handle = tokio::spawn(async move {
             if let Some(handler) = knowdb_for_task.as_ref() {
                 handler.ensure_thread_ready();
@@ -47,11 +51,14 @@ pub fn start_data_sinks(
             if let Err(e) = SinkWork::async_proc(
                 x,
                 cur_infra,
-                sink_cmd_sub,
-                sink_mon,
-                bad_sink_s,
-                fix_sink_r,
-                batch_timeout_ms,
+                SinkProcCtx {
+                    cmd_r: sink_cmd_sub,
+                    mon_send: sink_mon,
+                    bad_sink_s,
+                    fix_sink_r,
+                    batch_timeout_ms,
+                    drain_reporter: sink_drain_reporter,
+                },
             )
             .await
             {
@@ -70,6 +77,7 @@ pub fn start_infra_working(
     mon_send: MonSend,
     infra_group: &mut TaskGroup,
     act_mt_sink: &mut ActMaintainer,
+    drain_bus: &ReloadDrainBus,
 ) {
     let batch_timeout_ms = [
         infra_sink.default_sink.conf().batch_timeout_ms(),
@@ -95,6 +103,7 @@ pub fn start_infra_working(
     let (bad_sink_s, fix_sink_r) = act_mt_sink.fix_channel();
     let sink_cmd_sub = infra_group.subscribe();
     let sink_mon = mon_send.clone();
+    let infra_drain_reporter = drain_bus.reporter(TaskRole::Infra, "infra-sinks");
 
     let handle = tokio::spawn(async move {
         info_data!(
@@ -113,6 +122,7 @@ pub fn start_infra_working(
             bad_sink_s,
             fix_sink_r,
             batch_timeout_ms,
+            infra_drain_reporter,
         )
         .await
         {

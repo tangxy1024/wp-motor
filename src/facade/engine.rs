@@ -43,10 +43,11 @@ use wp_conf::constants;
 use wp_conf::engine::EngineConfig;
 use wp_ctrl_api::CommandType;
 
-#[cfg(test)]
-const P0_RELOAD_DRAIN_TIMEOUT: Duration = Duration::from_millis(300);
-#[cfg(not(test))]
-const P0_RELOAD_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+#[derive(Clone, Copy)]
+struct ProcessingLoadOptions {
+    emit_user_notices: bool,
+    persist_runtime_state: bool,
+}
 
 fn semantic_dict_config_path(main_conf: &EngineConfig, work_root: &Path) -> PathBuf {
     let primary = PathBuf::from(main_conf.knowledge_root()).join("semantic_dict.toml");
@@ -104,6 +105,21 @@ impl WpApp {
 
     pub fn control_handle(&self) -> RuntimeControlHandle {
         self.control_handle.clone()
+    }
+
+    pub async fn validate_load_model(&mut self) -> RunResult<()> {
+        let _ = load_processing_res(
+            &self.main_conf,
+            &self.conf_manager,
+            self.stat_reqs.clone(),
+            &self.env_dict,
+            ProcessingLoadOptions {
+                emit_user_notices: false,
+                persist_runtime_state: false,
+            },
+        )
+        .await?;
+        Ok(())
     }
 
     /// 若启用企业控制面，连接命令总线以支持热重载
@@ -182,6 +198,10 @@ impl WpApp {
             &self.conf_manager,
             self.stat_reqs.clone(),
             &self.env_dict,
+            ProcessingLoadOptions {
+                emit_user_notices: true,
+                persist_runtime_state: true,
+            },
         )
         .await?;
         let processing = start_processing_tasks(
@@ -189,10 +209,11 @@ impl WpApp {
             eng_res,
             runtime.monitor_sender(),
             &self.stat_reqs,
+            runtime.next_processing_epoch(),
         )
         .await?;
         let mut pending_processing = Some(processing);
-        let deadline = Instant::now() + P0_RELOAD_DRAIN_TIMEOUT;
+        let deadline = Instant::now() + runtime.reload_timeout();
         let mut force_replaced = false;
 
         if let Err(err) = runtime.isolate_picker().await {
@@ -506,14 +527,19 @@ async fn load_processing_res(
     conf_manager: &WarpConf,
     stat_reqs: StatRequires,
     env_dict: &EnvDict,
+    options: ProcessingLoadOptions,
 ) -> RunResult<EngineResource> {
     let mut ctx = OperationContext::want("load-processing-res").with_auto_log();
     let knowdb_path = knowdb_config_path(main_conf);
     let mut knowdb_handler = None;
     if knowdb_path.exists() {
-        let auth_file = PathBuf::from(conf_manager.runtime_path("authority.sqlite"));
-        let _ = std::fs::remove_file(&auth_file);
-        let authority_uri = format!("file:{}?mode=rwc&uri=true", auth_file.display());
+        let authority_uri = processing_authority_uri(conf_manager, options.persist_runtime_state);
+        if options.persist_runtime_state
+            && let Some(auth_file) = authority_path_from_uri(&authority_uri)
+            && Path::new(auth_file).exists()
+        {
+            let _ = std::fs::remove_file(auth_file);
+        }
         match init_thread_cloned_from_knowdb(
             Path::new(conf_manager.work_root_path().as_str()),
             &knowdb_path,
@@ -524,7 +550,7 @@ async fn load_processing_res(
                 let handler = crate::knowledge::KnowdbHandler::new(
                     Path::new(conf_manager.work_root_path().as_str()),
                     &knowdb_path,
-                    &authority_uri,
+                    authority_uri.as_str(),
                     env_dict,
                 );
                 handler.mark_initialized();
@@ -564,11 +590,6 @@ async fn load_processing_res(
         stat_reqs.get_requ_items(StatStage::Parse),
     )?;
 
-    let res_path = conf_manager.runtime_path("rule_mapping.dat");
-    if Path::new(&res_path).exists() {
-        std::fs::remove_file(&res_path).owe_res()?;
-    }
-
     let wpl_rule_cnt = res_center
         .wpl_index()
         .as_ref()
@@ -579,23 +600,34 @@ async fn load_processing_res(
             "rule_mapping.dat 生成时未找到任何 WPL 规则，请检查 [models].wpl 或 --wpl-dir 配置 (当前: {})",
             main_conf.rule_root()
         );
-        println!(
-            "rule_mapping.dat 生成时未找到任何 WPL 规则，请检查 [models].wpl 或 --wpl-dir 配置 (当前: {})",
-            main_conf.rule_root()
-        );
+        if options.emit_user_notices {
+            println!(
+                "rule_mapping.dat 生成时未找到任何 WPL 规则，请检查 [models].wpl 或 --wpl-dir 配置 (当前: {})",
+                main_conf.rule_root()
+            );
+        }
     }
     if res_center.name_mdl_res().is_empty() {
         warn_ctrl!(
             "rule_mapping.dat 生成时未加载任何 OML 模型，请检查 [models].oml 配置 (当前: {})",
             main_conf.oml_root()
         );
-        println!(
-            "rule_mapping.dat 生成时未加载任何 OML 模型，请检查 [models].oml 配置 (当前: {})",
-            main_conf.oml_root()
-        );
+        if options.emit_user_notices {
+            println!(
+                "rule_mapping.dat 生成时未加载任何 OML 模型，请检查 [models].oml 配置 (当前: {})",
+                main_conf.oml_root()
+            );
+        }
     }
 
-    wp_conf::utils::save_data(Some(res_center.to_string()), res_path.as_str(), true).owe_res()?;
+    if options.persist_runtime_state {
+        let res_path = conf_manager.runtime_path("rule_mapping.dat");
+        if Path::new(&res_path).exists() {
+            std::fs::remove_file(&res_path).owe_res()?;
+        }
+        wp_conf::utils::save_data(Some(res_center.to_string()), res_path.as_str(), true)
+            .owe_res()?;
+    }
 
     let builder = WarpResourceBuilder::new()
         .with_infra(infra_sinks)
@@ -604,4 +636,83 @@ async fn load_processing_res(
         .with_knowdb_handler(knowdb_handler);
     ctx.mark_suc();
     Ok(builder.build_unchecked())
+}
+
+fn processing_authority_uri(conf_manager: &WarpConf, persist_runtime_state: bool) -> String {
+    if persist_runtime_state {
+        return format!(
+            "file:{}?mode=rwc&uri=true",
+            conf_manager.runtime_path("authority.sqlite")
+        );
+    }
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    format!(
+        "file:wp-validate-{}-{}?mode=memory&cache=shared",
+        std::process::id(),
+        now.as_nanos()
+    )
+}
+
+fn authority_path_from_uri(uri: &str) -> Option<&str> {
+    let rest = uri.strip_prefix("file:")?;
+    let (path, query) = rest.split_once('?')?;
+    if query.contains("mode=memory") {
+        return None;
+    }
+    Some(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wp_conf::test_support::ForTest;
+    use wp_proj::project::{WarpProject, init::PrjScope};
+
+    #[tokio::test]
+    async fn load_processing_res_without_persist_does_not_write_runtime_state() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let dict = EnvDict::test_default();
+        WarpProject::init(temp_dir.path(), PrjScope::Full, &dict).expect("init project");
+
+        let conf_manager = WarpConf::new(temp_dir.path());
+        let main_conf = conf_manager
+            .load_engine_config(&dict)
+            .expect("load engine config");
+        let stat_reqs = stat_reqs_from(main_conf.stat_conf());
+
+        let _ = load_processing_res(
+            &main_conf,
+            &conf_manager,
+            stat_reqs,
+            &dict,
+            ProcessingLoadOptions {
+                emit_user_notices: false,
+                persist_runtime_state: false,
+            },
+        )
+        .await
+        .expect("validate processing load");
+
+        assert!(
+            !temp_dir.path().join(".run").exists(),
+            "validation path should not write work_root runtime state"
+        );
+    }
+
+    #[test]
+    fn validation_authority_uses_in_memory_sqlite_uri() {
+        let conf_manager = WarpConf::new("/tmp/wp-engine-validate");
+        let uri = processing_authority_uri(&conf_manager, false);
+        assert!(
+            uri.contains("mode=memory"),
+            "validation authority must use in-memory sqlite"
+        );
+        assert!(
+            authority_path_from_uri(&uri).is_none(),
+            "in-memory authority uri should not resolve to a filesystem path"
+        );
+    }
 }

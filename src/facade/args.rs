@@ -76,6 +76,10 @@ pub struct ParseArgs {
     /// Parse worker count/并发解析 worker 数
     #[clap(short = 'w', long = "parse-workers")]
     pub parse_workers: Option<usize>,
+    /// Reload fallback timeout in milliseconds; covers graceful drain and old-processing tail cleanup
+    /// reload 兜底超时（毫秒）；同时用于 graceful drain 和旧 processing 尾部清理
+    #[clap(long = "reload-timeout-ms")]
+    pub reload_timeout_ms: Option<u64>,
     /// Stop threshold/停止阈值
     #[clap(short = 'S', long)]
     pub check_stop: Option<usize>,
@@ -111,6 +115,7 @@ impl ParseArgs {
             line_max: self.max_line,
             parallel: val_or(self.parse_workers, conf.parallel()),
             speed_limit: conf.speed_limit(),
+            reload_timeout_ms: val_or(self.reload_timeout_ms, conf.reload_timeout_ms()),
             check: lev,
             check_fail_stop: stop,
             need_complete: true,

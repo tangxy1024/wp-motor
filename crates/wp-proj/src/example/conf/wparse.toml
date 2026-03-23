@@ -13,6 +13,7 @@ sinks = "./topology/sinks"
 [performance]
 rate_limit_rps = 10000
 parse_workers = 2
+reload_timeout_ms = 10000
 
 [rescue]
 path = "./data/rescue"

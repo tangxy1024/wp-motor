@@ -16,6 +16,7 @@ pub struct RuntimeArgs {
     pub line_max: Option<usize>,
     pub parallel: usize,
     pub speed_limit: usize,
+    pub reload_timeout_ms: u64,
     pub log: bool,
     pub check: usize,
     pub check_fail_stop: bool,
@@ -36,6 +37,7 @@ impl Default for RuntimeArgs {
             line_max: None,
             parallel: 2,
             speed_limit: 10000,
+            reload_timeout_ms: 10_000,
             log: true,
             check: 0,
             check_fail_stop: false,
@@ -80,6 +82,7 @@ impl RuntimeArgs {
         self.line_max = Some(10);
         self.parallel = 2;
         self.speed_limit = 5;
+        self.reload_timeout_ms = 300;
         self.stat_sec = 1;
         self.stat_print = true;
     }

@@ -92,12 +92,15 @@ pub struct PerformanceConf {
     pub rate_limit_rps: usize,
     #[serde(default = "default_parse_workers")]
     pub parse_workers: usize,
+    #[serde(default = "default_reload_timeout_ms")]
+    pub reload_timeout_ms: u64,
 }
 impl Default for PerformanceConf {
     fn default() -> Self {
         Self {
             rate_limit_rps: 10000,
             parse_workers: 2,
+            reload_timeout_ms: default_reload_timeout_ms(),
         }
     }
 }
@@ -188,6 +191,10 @@ pub fn default_speed_limit() -> usize {
     10000
 }
 
+pub fn default_reload_timeout_ms() -> u64 {
+    10_000
+}
+
 pub fn default_topology_conf() -> TopologyConf {
     TopologyConf {
         sources: default_sources_root(),
@@ -242,6 +249,7 @@ impl EngineConfig {
             performance: PerformanceConf {
                 rate_limit_rps: 10000,
                 parse_workers: 2,
+                reload_timeout_ms: default_reload_timeout_ms(),
             },
             log_conf: LogConf::default(),
             stat_conf: StatConf::default(),
@@ -288,6 +296,10 @@ impl EngineConfig {
 
     pub fn speed_limit(&self) -> usize {
         self.performance.rate_limit_rps
+    }
+
+    pub fn reload_timeout_ms(&self) -> u64 {
+        self.performance.reload_timeout_ms
     }
 
     pub fn stat_conf(&self) -> &StatConf {
@@ -538,7 +550,7 @@ mod tests {
     }
 
     #[test]
-    fn test_project_remote_conf_accepts_legacy_enable_key() {
+    fn test_project_remote_conf_accepts_enable_key() {
         let conf: EngineConfig = toml::from_str(
             r#"
             [project_remote]
@@ -547,5 +559,18 @@ mod tests {
         )
         .expect("parse config with project_remote.enable");
         assert!(conf.project_remote().enabled);
+    }
+
+    #[test]
+    fn test_engine_config_serializes_project_remote_as_snake_case() {
+        let toml = toml::to_string(&EngineConfig::default()).expect("serialize engine config");
+        assert!(
+            toml.contains("[project_remote]"),
+            "serialized config should use snake_case section name"
+        );
+        assert!(
+            !toml.contains("[project-remote]"),
+            "serialized config should not use kebab-case section name"
+        );
     }
 }

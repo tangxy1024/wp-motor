@@ -22,8 +22,6 @@ use wp_error::run_error::RunResult;
 /// 2. **项目检查**: 验证项目配置和组件的完整性
 /// 3. **组件管理**: 统一管理连接器、输入源、输出接收器等组件
 /// 4. **模型管理**: 管理 WPL 解析规则和 OML 模型配置
-///
-
 pub struct WarpProject {
     // 项目路径管理器
     paths: ProjectPaths,

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.6] - 2026-03-23
+
+### Added
+- **Runtime/Reload Timeout**: Add explicit `reload_timeout_ms` runtime parameter, available from CLI `--reload-timeout-ms` and `wparse.toml` `[performance].reload_timeout_ms`
+
+### Changed
+- **Runtime/Reload**: Replace the old fixed-wait reload path with event-driven drain coordination for parser, sink, and infra workers; reload now returns as soon as the old generation is quiesced, while `reload_timeout_ms` remains only as a fallback deadline
+- **Runtime/Reload Naming**: Rename the reload drain coordination types to `ReloadDrainBus`, `ReloadDrainReporter`, `ReloadDrainEvent`, and `ReloadDrainTracker` for clearer role semantics
+
+### Fixed
+- **Runtime/Reload**: Count parser/sink/infra drain targets from actual started workers and add bounded tail cleanup for detached old processing so reload does not wait indefinitely on stale tasks
+- **Project Init**: Harden `wp-proj` config/bootstrap file creation so missing parent directories now fail fast or are created before writing `conf/wparse.toml`, `conf/wpgen.toml`, semantic dict config, and admin API token files
+
 ## [1.19.5] - 2026-03-15
 
 ### Added

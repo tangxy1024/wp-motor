@@ -1,6 +1,6 @@
 use std::path::Path;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CheckOptions {
     pub work_root: String,
     pub what: String,
@@ -15,19 +15,6 @@ impl CheckOptions {
         Self {
             work_root: work_root.as_ref().to_string_lossy().to_string(),
             ..Default::default()
-        }
-    }
-}
-
-impl Default for CheckOptions {
-    fn default() -> Self {
-        Self {
-            work_root: String::new(),
-            what: String::new(),
-            console: false,
-            fail_fast: false,
-            json: false,
-            only_fail: false,
         }
     }
 }

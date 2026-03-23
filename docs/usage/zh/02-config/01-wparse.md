@@ -17,6 +17,7 @@ sinks   = "./topology/sinks"
 [performance]
 rate_limit_rps = 10000        # 限速（records/second）
 parse_workers  = 2            # 解析并发 worker 数
+reload_timeout_ms = 10000     # reload 兜底超时（毫秒）；覆盖 graceful drain 与旧 processing 尾部清理
 
 [rescue]
 path = "./data/rescue"        
@@ -47,3 +48,4 @@ target = "*"
 - `[models].knowledge` 是知识配置根目录，默认值为 `./models/knowledge`
 - `semantic_dict.toml` 默认读取 `${models.knowledge}/semantic_dict.toml`
 - `knowdb.toml` 默认读取 `${models.knowledge}/knowdb.toml`
+- `reload_timeout_ms` 默认 `10000`；CLI `--reload-timeout-ms` 优先于配置文件

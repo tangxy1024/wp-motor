@@ -201,7 +201,6 @@ shadow-rs = "1.5"
 
 [patch.crates-io]
 include-flate-codegen = { path = "patches/include-flate-codegen" }
-wp-model-core = { path = "../wp-model-core" }
 
 [dev-dependencies]
 serial_test = "3"

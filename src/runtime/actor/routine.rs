@@ -35,6 +35,37 @@ impl TaskManager {
         self.role_groups.push(RoleTaskGroup { role, group });
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.role_groups.is_empty()
+    }
+
+    pub fn detach_role(&mut self, role: TaskRole) -> Vec<TaskGroup> {
+        let mut detached = Vec::new();
+        let mut kept = Vec::with_capacity(self.role_groups.len());
+        for rg in self.role_groups.drain(..) {
+            if rg.role == role {
+                detached.push(rg.group);
+            } else {
+                kept.push(rg);
+            }
+        }
+        self.role_groups = kept;
+        detached
+    }
+
+    pub async fn prune_finished_groups(&mut self) -> RunResult<()> {
+        let mut kept = Vec::with_capacity(self.role_groups.len());
+        for mut rg in self.role_groups.drain(..) {
+            if rg.group.routin_is_finished() {
+                rg.group.wait_finished().await?;
+            } else {
+                kept.push(rg);
+            }
+        }
+        self.role_groups = kept;
+        Ok(())
+    }
+
     pub async fn isolate_role(&self, role: TaskRole) -> RunResult<()> {
         for rg in &self.role_groups {
             if rg.role == role && !rg.group.routin_is_finished() {

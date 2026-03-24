@@ -140,7 +140,7 @@ tags = []
 
 [sources.params_override]
 encode = "text"
-file = "gen.dat"
+file = "gen*.dat"
 base = "data/in_dat"
 "#;
     // 确保父目录存在

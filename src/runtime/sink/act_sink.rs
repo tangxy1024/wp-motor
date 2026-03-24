@@ -11,6 +11,7 @@ use crate::orchestrator::config::build_sinks::{SinkRouteTable, build_sink_target
 use crate::runtime::actor::command::{ActorCtrlCmd, TaskScope};
 use crate::runtime::actor::command::{CmdSubscriber, TaskController};
 use crate::runtime::actor::constants::ACTOR_IDLE_TICK_MS;
+use crate::runtime::reload_drain::ReloadDrainReporter;
 use crate::runtime::sink::drain::{DrainEvent, DrainState};
 use crate::sinks::SinkDispatcher;
 use crate::sinks::SinkRouteAgent;
@@ -40,6 +41,15 @@ pub struct SinkService {
 }
 
 pub struct SinkWork {}
+
+pub struct SinkProcCtx {
+    pub cmd_r: CmdSubscriber,
+    pub mon_send: MonSend,
+    pub bad_sink_s: ASinkSender,
+    pub fix_sink_r: ASinkReceiver,
+    pub batch_timeout_ms: u64,
+    pub drain_reporter: ReloadDrainReporter,
+}
 
 // 显式的基础组打包，避免依赖顺序传参
 pub struct InfraGroups {
@@ -150,15 +160,11 @@ impl SinkWork {
     pub async fn async_proc(
         mut sink: SinkDispatcher,
         infra: InfraSinkAgent,
-        mut cmd_r: CmdSubscriber,
-        mon_send: MonSend,
-        bad_sink_s: ASinkSender,
-        mut fix_sink_r: ASinkReceiver,
-        batch_timeout_ms: u64,
+        mut ctx_args: SinkProcCtx,
     ) -> SinkResult<()> {
         let mut ctx = OperationContext::want("sink start proc");
         let name = format!("work-sink:{:20}", sink.conf().name());
-        let mut run_ctrl = TaskController::new(name.as_str(), cmd_r.clone(), None);
+        let mut run_ctrl = TaskController::new(name.as_str(), ctx_args.cmd_r.clone(), None);
         let mut cache = FieldQueryCache::with_capacity(1000);
         let sink_name = sink.get_name().to_string();
         ctx.record("name", name);
@@ -166,7 +172,7 @@ impl SinkWork {
 
         let mut stat_tick = interval(Duration::from_millis(STAT_INTERVAL_MS as u64));
         stat_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
-        let mut flush_tick = interval(Duration::from_millis(batch_timeout_ms.max(1)));
+        let mut flush_tick = interval(Duration::from_millis(ctx_args.batch_timeout_ms.max(1)));
         flush_tick.set_missed_tick_behavior(MissedTickBehavior::Skip);
         let mut need_send_stat = false;
         loop {
@@ -176,7 +182,7 @@ impl SinkWork {
                         Some(pkg) => {
                             sink.record_ingress_batch(pkg.len());
                             let processed = sink
-                                .group_sink_package(pkg, &infra, &bad_sink_s, Some(&mon_send), &mut cache)
+                                .group_sink_package(pkg, &infra, &ctx_args.bad_sink_s, Some(&ctx_args.mon_send), &mut cache)
                                 .await?;
                             if processed > 0 {
                                 run_ctrl.rec_task_suc_cnt(processed);
@@ -188,16 +194,20 @@ impl SinkWork {
                         None => {
                             match drain_state.channel_closed_is_drained() {
                                 DrainEvent::Drained => {
+                                    ctx_args.drain_reporter.notify();
                                     info_ctrl!("{} drain complete", sink_name);
                                     break;
                                 }
-                                DrainEvent::AllClosed => break,
+                                DrainEvent::AllClosed => {
+                                    ctx_args.drain_reporter.notify();
+                                    break;
+                                }
                                 DrainEvent::Pending => {}
                             }
                         }
                     }
                 }
-                cmd_res = cmd_r.recv(), if !drain_state.is_draining() => {
+                cmd_res = ctx_args.cmd_r.recv(), if !drain_state.is_draining() => {
                     match cmd_res {
                         Ok(cmd) => {
                             if let ActorCtrlCmd::Execute(TaskScope::One(target)) = cmd.clone() {
@@ -223,23 +233,23 @@ impl SinkWork {
                         }
                     }
                 }
-                Some(h) = fix_sink_r.recv(), if !drain_state.is_draining() => {
-                    Self::proc_fix_ex(h, &mut sink, &mon_send).await?;
+                Some(h) = ctx_args.fix_sink_r.recv(), if !drain_state.is_draining() => {
+                    Self::proc_fix_ex(h, &mut sink, &ctx_args.mon_send).await?;
                 }
                 _ = stat_tick.tick() => {
                     if need_send_stat {
                         need_send_stat = false;
                         let sinks = sink.get_sinks_mut();
                         for s in sinks.iter_mut() {
-                            s.send_stat(&mon_send).await?;
+                            s.send_stat(&ctx_args.mon_send).await?;
                         }
-                        sink.send_ingress_stat(&mon_send).await?;
+                        sink.send_ingress_stat(&ctx_args.mon_send).await?;
                     }
                 }
                 _ = flush_tick.tick() => {
                     let sinks = sink.get_sinks_mut();
                     for s in sinks.iter_mut() {
-                        s.flush(Some(&bad_sink_s), Some(&mon_send)).await?;
+                        s.flush(Some(&ctx_args.bad_sink_s), Some(&ctx_args.mon_send)).await?;
                     }
                     need_send_stat = true;
                 }
@@ -247,13 +257,14 @@ impl SinkWork {
         }
         let sinks = sink.get_sinks_mut();
         for s in sinks.iter_mut() {
-            s.flush(Some(&bad_sink_s), Some(&mon_send)).await?;
+            s.flush(Some(&ctx_args.bad_sink_s), Some(&ctx_args.mon_send))
+                .await?;
         }
         let sinks = sink.get_sinks_mut();
         for s in sinks.iter_mut() {
-            s.send_stat(&mon_send).await?;
+            s.send_stat(&ctx_args.mon_send).await?;
         }
-        sink.send_ingress_stat(&mon_send).await?;
+        sink.send_ingress_stat(&ctx_args.mon_send).await?;
         sink.proc_end().await?;
         info_ctrl!("{} async sinks proc end", sink_name);
         Ok(())
@@ -283,6 +294,7 @@ impl SinkWork {
         bad_sink_s: ASinkSender,
         mut fix_sink_r: ASinkReceiver,
         batch_timeout_ms: u64,
+        mut drain_reporter: ReloadDrainReporter,
     ) -> SinkResult<()> {
         // 基础组固定 5 个：default/miss/residue/monitor/error
         let mut default_sink = InfraChannel::new(groups.default, &bad_sink_s, &mon_send);
@@ -304,30 +316,35 @@ impl SinkWork {
             tokio::select! {
                 pkg_opt = default_sink.get_dat_r_mut().recv(), if !default_sink.is_closed() => {
                     if default_sink.handle_pkg(InfraSinkType::Default,pkg_opt, &mut drain_state, &mut run_ctrl).await? {
+                        drain_reporter.notify();
                         break;
                     }
                     need_send_stat = true;
                 }
                 pkg_opt = miss_cnn.get_dat_r_mut().recv(), if !miss_cnn.is_closed() => {
                     if miss_cnn.handle_pkg(InfraSinkType::Miss,pkg_opt, &mut drain_state, &mut run_ctrl).await? {
+                        drain_reporter.notify();
                         break;
                     }
                     need_send_stat = true;
                 }
                 pkg_opt = residue_cnn.get_dat_r_mut().recv(), if !residue_cnn.is_closed() => {
                     if residue_cnn.handle_pkg(InfraSinkType::Residue,pkg_opt, &mut drain_state, &mut run_ctrl).await? {
+                        drain_reporter.notify();
                         break;
                     }
                     need_send_stat = true;
                 }
                 pkg_opt = monitor_cnn.get_dat_r_mut().recv(), if !monitor_cnn.is_closed() => {
                     if monitor_cnn.handle_pkg(InfraSinkType::Monitor,pkg_opt, &mut drain_state, &mut run_ctrl).await? {
+                        drain_reporter.notify();
                         break;
                     }
                     need_send_stat = true;
                 }
                 pkg_opt = error_cnn.get_dat_r_mut().recv(), if !error_cnn.is_closed() => {
                     if error_cnn.handle_pkg(InfraSinkType::Error,pkg_opt, &mut drain_state, &mut run_ctrl).await? {
+                        drain_reporter.notify();
                         break;
                     }
                     need_send_stat = true;

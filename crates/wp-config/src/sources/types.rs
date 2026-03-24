@@ -94,7 +94,8 @@ mod tests {
     #[test]
     fn env_eval_on_sources_config_propagates_to_items() {
         let mut params = ParamMap::new();
-        params.insert("path".into(), json!("${PATH}"));
+        params.insert("base".into(), json!("${BASE_DIR}"));
+        params.insert("file".into(), json!("${FILE_NAME}"));
         let cfg = WpSourcesConfig {
             sources: vec![WpSource {
                 key: "${KEY}".into(),
@@ -107,15 +108,20 @@ mod tests {
         let mut dict = EnvDict::new();
         dict.insert("KEY", ValueType::from("src"));
         dict.insert("CONNECT", ValueType::from("file"));
-        dict.insert("PATH", ValueType::from("/tmp/a.dat"));
+        dict.insert("BASE_DIR", ValueType::from("/tmp"));
+        dict.insert("FILE_NAME", ValueType::from("a.dat"));
 
         let evaluated = cfg.env_eval(&dict);
         let src = evaluated.sources.first().unwrap();
         assert_eq!(src.key, "src");
         assert_eq!(src.connect, "file");
         assert_eq!(
-            src.params.get("path").and_then(|v| v.as_str()),
-            Some("/tmp/a.dat")
+            src.params.get("base").and_then(|v| v.as_str()),
+            Some("/tmp")
+        );
+        assert_eq!(
+            src.params.get("file").and_then(|v| v.as_str()),
+            Some("a.dat")
         );
     }
 }

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.8] - 2026-03-24
+
+### Fixed
+- **Source/File Observability**: Align source statistics and total-input counting with the runtime-only `base + file` contract for file sources; observability paths now reject legacy `path` specs instead of silently accepting configs that runtime validation already forbids
+- **Validate/Total Input**: Stop silently falling back to `sum of sinks` when file-source total input cannot be determined reliably; `wproj data validate` now preserves `Some(0)` for empty files and fails explicitly on wildcard no-match or unreadable source files
+
+## [1.19.7] - 2026-03-23
+
+### Added
+- **Runtime/Reload Timeout**: Add explicit `reload_timeout_ms` runtime parameter, available from CLI `--reload-timeout-ms` and `wparse.toml` `[performance].reload_timeout_ms`
+- **Source/File**: Allow file sources to use wildcard patterns in `file` while preserving file-name order across matched files
+
+### Changed
+- **Runtime/Reload**: Replace the old fixed-wait reload path with event-driven drain coordination for parser, sink, and infra workers; reload now returns as soon as the old generation is quiesced, while `reload_timeout_ms` remains only as a fallback deadline
+- **Runtime/Reload Naming**: Rename the reload drain coordination types to `ReloadDrainBus`, `ReloadDrainReporter`, `ReloadDrainEvent`, and `ReloadDrainTracker` for clearer role semantics
+- **Admin API/Auth**: Move the default bearer token location from project-local `runtime/admin_api.token` to `${HOME}/.warp_parse/admin_api.token`, while keeping a work-root fallback when `HOME` is unavailable
+- **Source/File Config**: Drop `path` support from runtime file-source specs; use `base + file` only, keep wildcard support limited to `file`, and process matched files sequentially even when each file uses `instances > 1` parallel shard readers
+- **Source/File Unified Config**: Align unified source config tests and helper builders with the runtime-only `base + file` contract so file connectors no longer emit legacy `path` params
+- **Connectors/Sources**: Migrate the built-in `file`, `syslog`, and `tcp` source connector implementations into `wp-core-connectors`; `wp-motor` now keeps compatibility re-export modules and runtime registration glue only
+- **Dependencies/Connectors**: Switch `wp-motor` back to the published `wp-core-connectors 0.1.2` release after the source-connector migration, instead of relying on a local path override
+- **wp-proj/init Demo**: Change the generated `topology/sources/wpsrc.toml` file override from `gen.dat` to `gen*.dat` so the demo source matches both single-file wpgen output and parallel shard files like `gen-r0.dat`
+
+### Fixed
+- **Runtime/Reload**: Count parser/sink/infra drain targets from actual started workers and add bounded tail cleanup for detached old processing so reload does not wait indefinitely on stale tasks
+- **Project Init**: Harden `wp-proj` config/bootstrap file creation so missing parent directories now fail fast or are created before writing `conf/wparse.toml`, `conf/wpgen.toml`, semantic dict config, and admin API token files
+- **Project Bootstrap**: Create `work_root` and `conf/` before `WarpProject` loads or auto-initializes engine config, preventing intermittent `save toml` failures under temp-dir based test workspaces
+
 ## [1.19.5] - 2026-03-15
 
 ### Added

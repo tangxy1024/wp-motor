@@ -29,24 +29,34 @@
 //! }
 //! ```
 
-pub mod config;
-pub mod constants;
-pub mod factory;
-pub mod normalize;
-pub mod tcp_source;
-pub mod udp_source;
-
-// Re-export public API
-pub use config::{Protocol, SyslogSourceSpec};
-pub use factory::SyslogSourceFactory;
-pub use tcp_source::TcpSyslogSource;
-pub use udp_source::UdpSyslogSource;
-mod tcp_tests;
-
-/// Register the syslog source factory
-pub fn register_syslog_factory() {
-    wp_core_connectors::registry::register_source_factory(factory::SyslogSourceFactory::new());
+pub mod config {
+    pub use wp_core_connectors::sources::syslog::config::*;
 }
+
+pub mod constants {
+    pub use wp_core_connectors::sources::syslog::constants::*;
+}
+
+pub mod factory {
+    pub use wp_core_connectors::sources::syslog::factory::*;
+}
+
+pub mod normalize {
+    pub use wp_core_connectors::sources::syslog::normalize::*;
+}
+
+pub mod tcp_source {
+    pub use wp_core_connectors::sources::syslog::tcp_source::*;
+}
+
+pub mod udp_source {
+    pub use wp_core_connectors::sources::syslog::udp_source::*;
+}
+
+pub use wp_core_connectors::sources::syslog::{
+    Protocol, SyslogSourceFactory, SyslogSourceSpec, TcpSyslogSource, UdpSyslogSource,
+    register_syslog_factory,
+};
 
 // Auto-register removed: registration is centralized in connectors::startup
 

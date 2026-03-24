@@ -34,12 +34,14 @@ async fn test_unified_sources_config_build_file_source() {
             r#"[[connectors]]
 id = "file_main"
 type = "file"
-allow_override = ["path","encode"]
+allow_override = ["base","file","encode"]
 [connectors.params]
-path = "{}"
+base = "{}"
+file = "{}"
 encode = "text"
 "#,
-            tmp_path.display()
+            tmp_path.parent().unwrap().display(),
+            tmp_path.file_name().unwrap().to_string_lossy()
         ),
     )
     .unwrap();
@@ -77,12 +79,13 @@ fn test_unified_sources_config_validate_only() {
             r#"[[connectors]]
 id = "file_main"
 type = "file"
-allow_override = ["path","encode"]
+allow_override = ["base","file","encode"]
 [connectors.params]
-path = "{}"
+base = "{}"
+file = "{}"
 encode = "text"
 "#,
-            "/tmp/wparse_unified_sources_validate.log"
+            "/tmp", "wparse_unified_sources_validate.log"
         ),
     )
     .unwrap();
@@ -212,12 +215,14 @@ async fn test_build_override_whitelist_enforced() {
             r#"[[connectors]]
 id = "file_main"
 type = "file"
-allow_override = ["path"]
+allow_override = ["base","file"]
 [connectors.params]
-path = "{}"
+base = "{}"
+file = "{}"
 encode = "text"
 "#,
-            tmp_path.display()
+            tmp_path.parent().unwrap().display(),
+            tmp_path.file_name().unwrap().to_string_lossy()
         ),
     )
     .unwrap();

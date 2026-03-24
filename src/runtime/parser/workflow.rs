@@ -2,6 +2,7 @@ use crate::{runtime::prelude::*, types::EventBatchRecv, types::EventBatchSend};
 
 use super::act_parser::ActParser;
 use crate::runtime::actor::command::CmdSubscriber;
+use crate::runtime::reload_drain::ReloadDrainReporter;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc::error::TrySendError;
@@ -14,6 +15,7 @@ pub struct ActorWork {
     cmd_r: CmdSubscriber,
     mon_s: MonSend,
     actor: ActParser,
+    drain_reporter: Option<ReloadDrainReporter>,
 }
 
 impl ActorWork {
@@ -30,6 +32,25 @@ impl ActorWork {
             cmd_r,
             mon_s,
             actor,
+            drain_reporter: None,
+        }
+    }
+
+    pub fn with_drain_reporter<S: Into<String>>(
+        name: S,
+        dat_r: EventBatchRecv,
+        cmd_r: CmdSubscriber,
+        mon_s: MonSend,
+        actor: ActParser,
+        drain_reporter: ReloadDrainReporter,
+    ) -> Self {
+        ActorWork {
+            name: name.into(),
+            dat_r,
+            cmd_r,
+            mon_s,
+            actor,
+            drain_reporter: Some(drain_reporter),
         }
     }
     pub async fn proc(&mut self, setting: ParseOption) -> WparseResult<()> {
@@ -42,6 +63,9 @@ impl ActorWork {
         {
             error_ctrl!("actor({}) work error: {}", self.name, e);
             return Err(e);
+        }
+        if let Some(mut reporter) = self.drain_reporter.take() {
+            reporter.notify();
         }
         info_ctrl!("actor({}) work end", self.name);
         Ok(())

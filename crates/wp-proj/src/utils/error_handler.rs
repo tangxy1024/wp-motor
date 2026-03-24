@@ -126,13 +126,10 @@ impl ErrorHandler {
 
     /// 检查文件是否为空
     pub fn check_file_not_empty(path: &Path, description: &str) -> RunResult<()> {
-        if let Ok(content) = std::fs::read_to_string(path) {
-            if content.trim().is_empty() {
-                return Self::config_error(format!(
-                    "配置错误: {} 文件为空: {:?}",
-                    description, path
-                ));
-            }
+        if let Ok(content) = std::fs::read_to_string(path)
+            && content.trim().is_empty()
+        {
+            return Self::config_error(format!("配置错误: {} 文件为空: {:?}", description, path));
         }
         Ok(())
     }

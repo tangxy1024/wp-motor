@@ -4,6 +4,7 @@ pub mod errors;
 pub mod generator;
 pub mod parser;
 mod prelude;
+pub(crate) mod reload_drain;
 pub mod sink;
 pub mod supervisor;
 pub mod tasks;

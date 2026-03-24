@@ -200,6 +200,11 @@ control plane
 4. 旧 processing 优先走 graceful drain
 5. graceful drain 超时后，再进入 force replace
 
+当前 `graceful drain` 的兜底上界由 `reload_timeout_ms` 控制。
+这个值同时约束：
+- reload 主流程等待旧 processing 发出 drain 完成信号的最长时间
+- 旧 processing 在切走后的尾部清理窗口
+
 ### 4. graceful drain 与 force replace
 
 当前实现采用“两段式”结束旧 processing。
@@ -218,6 +223,10 @@ control plane
 
 - 尽量把旧链路中已经进入处理通道的数据消费完成
 - 在不引入双代长期并存的前提下，争取无损切换
+
+说明：
+- 正常场景下，reload 应在 drain 信号收齐后立即完成，不应等满 `reload_timeout_ms`
+- `reload_timeout_ms` 是异常/退化路径的兜底值，而不是期望耗时
 
 #### 第二阶段：超时兜底
 

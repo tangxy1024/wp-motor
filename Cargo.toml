@@ -54,7 +54,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.19.4"
+version = "1.19.8" # @gxl:set(version)
 edition = "2024"
 license = "Apache-2.0"
 
@@ -201,7 +201,6 @@ shadow-rs = "1.5"
 
 [patch.crates-io]
 include-flate-codegen = { path = "patches/include-flate-codegen" }
-wp-model-core = { path = "../wp-model-core" }
 
 [dev-dependencies]
 serial_test = "3"
@@ -209,6 +208,7 @@ httpmock = "0.8"
 collection_literals = "1.0"
 criterion = { workspace = true }
 tempfile = "3.23"
+wp_proj = { workspace = true }
 
 # ============================================================================
 # Feature Flags

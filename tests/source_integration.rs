@@ -508,7 +508,8 @@ connect = "file_main"
 enable = true
 tags = ["test"]
 params_override = {
-    path = "/non/existent/file.log",
+    base = "/non/existent",
+    file = "file.log",
     encode = "text"
 }
 "#;

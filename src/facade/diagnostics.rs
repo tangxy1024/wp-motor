@@ -72,10 +72,10 @@ pub fn collect_hints(es: &str) -> Vec<&'static str> {
         || es.contains("File source missing 'path'")
     {
         hints.push(
-            "生成输入数据: 'wpgen conf init && wpgen rule -n 1000' 或创建 ./data/in_dat/gen.dat",
+            "生成输入数据: 'wpgen conf init && wpgen rule -n 1000'，默认写入 ./data/in_dat/gen.dat；若启用并行则生成 ./data/in_dat/gen-r*.dat",
         );
         hints.push("确认工作目录是否正确，必要时使用 --work_root 指定");
-        hints.push("文件源示例: [[sources]] key='file_1' connect='file_main' enable=true params_override={ base='./data/in_dat', file='gen.dat', encode='text' }");
+        hints.push("文件源示例: [[sources]] key='file_1' connect='file_main' enable=true params_override={ base='./data/in_dat', file='gen*.dat', encode='text' }");
     }
     if es.contains("requires feature 'kafka'") || (es.contains("kafka") && es.contains("feature")) {
         hints.push("Kafka 源需要启用 'kafka' 特性：如 'cargo build --features kafka --bins' 或启用 'community'");

@@ -4,6 +4,7 @@ use crate::runtime::actor::TaskRole;
 use crate::runtime::actor::signal::ShutdownCmd;
 use crate::runtime::actor::{TaskGroup, TaskManager};
 use crate::runtime::collector::recovery::ActCovPicker;
+use crate::runtime::reload_drain::ReloadDrainBus;
 use crate::runtime::sink::act_sink::SinkService;
 use crate::runtime::sink::infrastructure::InfraSinkService;
 use crate::runtime::supervisor::maintenance::ActMaintainer;
@@ -54,11 +55,13 @@ pub async fn recover_main(
     let agent = act_sink.agent();
     let mut sink_amt = ActMaintainer::new(mt_group.subscribe());
     let infra_agent = infra_sink.agent();
+    let (drain_bus, _drain_rx) = ReloadDrainBus::new(0);
     start_infra_working(
         infra_sink,
         mon_send.clone(),
         &mut infra_group,
         &mut sink_amt,
+        &drain_bus,
     );
 
     let sink_group = start_data_sinks(
@@ -67,6 +70,7 @@ pub async fn recover_main(
         mon_send,
         &mut sink_amt,
         knowdb_handler,
+        &drain_bus,
     );
     //sink_group.broadcast_cmd(CtrlCmd::Work(DoScope::One(sink_name.clone())));
 

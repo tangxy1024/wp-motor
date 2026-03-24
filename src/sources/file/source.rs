@@ -6,7 +6,11 @@ use base64::engine::general_purpose;
 use bytes::Bytes;
 use orion_conf::{ErrorWith, UvsFrom};
 use orion_error::ToStructError;
+use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::Arc;
+use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+use tokio::task::JoinHandle;
 use wp_connector_api::{
     DataSource, SourceBatch, SourceError, SourceEvent, SourceReason, SourceResult, Tags,
 };
@@ -120,6 +124,113 @@ impl FileSource {
     }
 }
 
+pub struct MultiFileSource {
+    key: String,
+    paths: VecDeque<String>,
+    encode: FileEncoding,
+    tags: Tags,
+    instances: usize,
+    current_rx: Option<UnboundedReceiver<ParallelSourceMsg>>,
+    current_tasks: Vec<JoinHandle<()>>,
+    active_tasks: usize,
+}
+
+impl MultiFileSource {
+    pub fn new(
+        key: String,
+        paths: Vec<String>,
+        encode: FileEncoding,
+        tags: Tags,
+        instances: usize,
+    ) -> Self {
+        Self {
+            key,
+            paths: paths.into(),
+            encode,
+            tags,
+            instances,
+            current_rx: None,
+            current_tasks: Vec::new(),
+            active_tasks: 0,
+        }
+    }
+
+    async fn launch_next_file(&mut self) -> SourceResult<bool> {
+        let Some(path) = self.paths.pop_front() else {
+            return Ok(false);
+        };
+        let ranges = compute_file_ranges(Path::new(&path), self.instances)
+            .map_err(|e| SourceError::from(SourceReason::Disconnect(e.to_string())))
+            .with(path.as_str())
+            .want("open source file")?;
+        let (tx, rx) = unbounded_channel();
+        let shard_total = ranges.len();
+        let mut tasks = Vec::with_capacity(shard_total);
+        for (idx, (start, end)) in ranges.into_iter().enumerate() {
+            let shard_key = if shard_total > 1 {
+                format!("{}-{}", self.key, idx + 1)
+            } else {
+                self.key.clone()
+            };
+            let mut source = FileSource::new(
+                shard_key,
+                &path,
+                self.encode.clone(),
+                self.tags.clone(),
+                start,
+                end,
+            )
+            .await?;
+            let tx = tx.clone();
+            tasks.push(tokio::spawn(async move {
+                loop {
+                    match source.receive().await {
+                        Ok(batch) => {
+                            if tx.send(ParallelSourceMsg::Batch(batch)).is_err() {
+                                break;
+                            }
+                        }
+                        Err(err) if matches!(err.reason(), SourceReason::EOF) => {
+                            let _ = tx.send(ParallelSourceMsg::Done);
+                            break;
+                        }
+                        Err(err) => {
+                            let _ = tx.send(ParallelSourceMsg::Err(err));
+                            break;
+                        }
+                    }
+                }
+            }));
+        }
+        drop(tx);
+        self.current_rx = Some(rx);
+        self.current_tasks = tasks;
+        self.active_tasks = shard_total;
+        Ok(true)
+    }
+
+    async fn clear_finished_group(&mut self) {
+        for task in self.current_tasks.drain(..) {
+            let _ = task.await;
+        }
+        self.current_rx = None;
+        self.active_tasks = 0;
+    }
+
+    async fn abort_current_group(&mut self) {
+        for task in &self.current_tasks {
+            task.abort();
+        }
+        self.clear_finished_group().await;
+    }
+}
+
+enum ParallelSourceMsg {
+    Batch(SourceBatch),
+    Done,
+    Err(SourceError),
+}
+
 #[async_trait]
 impl DataSource for FileSource {
     async fn receive(&mut self) -> SourceResult<SourceBatch> {
@@ -160,5 +271,122 @@ impl DataSource for FileSource {
 
     fn identifier(&self) -> String {
         self.key.clone()
+    }
+}
+
+#[async_trait]
+impl DataSource for MultiFileSource {
+    async fn receive(&mut self) -> SourceResult<SourceBatch> {
+        loop {
+            if self.current_rx.is_none() && !self.launch_next_file().await? {
+                return Err(SourceError::from(SourceReason::EOF));
+            }
+
+            let msg = match self.current_rx.as_mut() {
+                Some(rx) => rx.recv().await,
+                None => continue,
+            };
+            match msg {
+                Some(ParallelSourceMsg::Batch(batch)) => return Ok(batch),
+                Some(ParallelSourceMsg::Done) => {
+                    self.active_tasks = self.active_tasks.saturating_sub(1);
+                    if self.active_tasks == 0 {
+                        self.clear_finished_group().await;
+                    }
+                }
+                Some(ParallelSourceMsg::Err(err)) => {
+                    self.abort_current_group().await;
+                    return Err(err);
+                }
+                None => {
+                    if self.active_tasks == 0 {
+                        self.clear_finished_group().await;
+                        continue;
+                    }
+                    self.abort_current_group().await;
+                    return Err(SourceError::from(SourceReason::Disconnect(
+                        "file source worker channel closed unexpectedly".to_string(),
+                    )));
+                }
+            }
+        }
+    }
+
+    fn try_receive(&mut self) -> Option<SourceBatch> {
+        None
+    }
+
+    fn can_try_receive(&mut self) -> bool {
+        false
+    }
+
+    fn identifier(&self) -> String {
+        self.key.clone()
+    }
+
+    async fn close(&mut self) -> SourceResult<()> {
+        self.abort_current_group().await;
+        Ok(())
+    }
+}
+
+pub(super) fn compute_file_ranges(
+    path: &Path,
+    instances: usize,
+) -> std::io::Result<Vec<(u64, Option<u64>)>> {
+    let size = std::fs::metadata(path)?.len();
+    if size == 0 || instances <= 1 {
+        return Ok(vec![(0, None)]);
+    }
+    let chunk = size.div_ceil(instances as u64);
+    let mut starts = vec![0u64];
+    for i in 1..instances {
+        let target = chunk.saturating_mul(i as u64);
+        if target >= size {
+            break;
+        }
+        let aligned = align_to_next_line(path, target, size)?;
+        if aligned < size {
+            starts.push(aligned);
+        }
+    }
+    starts.sort_unstable();
+    starts.dedup();
+    let mut ranges = Vec::with_capacity(starts.len());
+    for (idx, &start) in starts.iter().enumerate() {
+        let end = if idx + 1 < starts.len() {
+            Some(starts[idx + 1])
+        } else {
+            None
+        };
+        ranges.push((start, end));
+    }
+    Ok(ranges)
+}
+
+fn align_to_next_line(path: &Path, offset: u64, file_size: u64) -> std::io::Result<u64> {
+    use std::io::{Read, Seek, SeekFrom};
+    if offset == 0 {
+        return Ok(0);
+    }
+    let mut file = std::fs::File::open(path)?;
+    let seek_pos = offset.saturating_sub(1);
+    file.seek(SeekFrom::Start(seek_pos))?;
+    let mut pos = seek_pos;
+    let mut buf = [0u8; 4096];
+    loop {
+        let read = file.read(&mut buf)?;
+        if read == 0 {
+            return Ok(file_size);
+        }
+        for &b in &buf[..read] {
+            pos += 1;
+            if b == b'\n' {
+                return Ok(pos);
+            }
+            if pos >= file_size {
+                return Ok(file_size);
+            }
+        }
     }
 }

@@ -94,7 +94,7 @@ fn evaluate_target(
     let mut row = Row::new(wrs.to_string());
 
     if comps.engine {
-        row.conf = match cfg_face::load_warp_engine_confs(&wrs, dict) {
+        row.conf = match cfg_face::load_warp_engine_confs(wrs, dict) {
             Ok((cm, _)) => {
                 row.conf_detail = Some(cm.config_path_string(ENGINE_CONF_FILE));
                 Cell::success()
@@ -133,11 +133,11 @@ fn evaluate_target(
         row.connectors = Cell::from_result(
             project
                 .connectors()
-                .check(&wrs, dict)
+                .check(wrs, dict)
                 .map(|_| ())
                 .map_err(|e| e.reason().to_string()),
         );
-        match collect_connector_counts(&wrs, dict) {
+        match collect_connector_counts(wrs, dict) {
             Ok(stats) => row.connector_counts = Some(stats),
             Err(_e) => {
                 row.connector_counts = None;

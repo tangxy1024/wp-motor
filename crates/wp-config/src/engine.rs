@@ -12,6 +12,24 @@ use crate::stat::StatConf;
 
 impl EngineConfig {}
 
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
+pub struct ProjectRemoteConf {
+    #[serde(default, alias = "enable")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub repo: String,
+    #[serde(default)]
+    pub init_version: String,
+}
+
+impl EnvEvaluable<ProjectRemoteConf> for ProjectRemoteConf {
+    fn env_eval(mut self, dict: &EnvDict) -> ProjectRemoteConf {
+        self.repo = self.repo.env_eval(dict);
+        self.init_version = self.init_version.env_eval(dict);
+        self
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct RescueConf {
     #[serde(default = "default_rescue_path")]
@@ -74,12 +92,15 @@ pub struct PerformanceConf {
     pub rate_limit_rps: usize,
     #[serde(default = "default_parse_workers")]
     pub parse_workers: usize,
+    #[serde(default = "default_reload_timeout_ms")]
+    pub reload_timeout_ms: u64,
 }
 impl Default for PerformanceConf {
     fn default() -> Self {
         Self {
             rate_limit_rps: 10000,
             parse_workers: 2,
+            reload_timeout_ms: default_reload_timeout_ms(),
         }
     }
 }
@@ -118,6 +139,9 @@ pub struct EngineConfig {
     /// 语义分析功能开关（默认关闭，启用后加载 jieba 分词器和语义词典）
     #[serde(default)]
     semantic: SemanticConf,
+    /// 远程规则版本更新配置（默认关闭）
+    #[serde(default)]
+    project_remote: ProjectRemoteConf,
 }
 
 impl EnvEvaluable<EngineConfig> for EngineConfig {
@@ -125,6 +149,7 @@ impl EnvEvaluable<EngineConfig> for EngineConfig {
         self.models = self.models.env_eval(dict);
         self.topology = self.topology.env_eval(dict);
         self.rescue = self.rescue.env_eval(dict);
+        self.project_remote = self.project_remote.env_eval(dict);
         self
     }
 }
@@ -166,6 +191,10 @@ pub fn default_speed_limit() -> usize {
     10000
 }
 
+pub fn default_reload_timeout_ms() -> u64 {
+    10_000
+}
+
 pub fn default_topology_conf() -> TopologyConf {
     TopologyConf {
         sources: default_sources_root(),
@@ -195,6 +224,7 @@ impl Default for EngineConfig {
             skip_parse: false,
             skip_sink: false,
             semantic: SemanticConf::default(),
+            project_remote: ProjectRemoteConf::default(),
         }
     }
 }
@@ -219,6 +249,7 @@ impl EngineConfig {
             performance: PerformanceConf {
                 rate_limit_rps: 10000,
                 parse_workers: 2,
+                reload_timeout_ms: default_reload_timeout_ms(),
             },
             log_conf: LogConf::default(),
             stat_conf: StatConf::default(),
@@ -226,6 +257,7 @@ impl EngineConfig {
             skip_parse: false,
             skip_sink: false,
             semantic: SemanticConf::default(),
+            project_remote: ProjectRemoteConf::default(),
         }
     }
 
@@ -266,6 +298,10 @@ impl EngineConfig {
         self.performance.rate_limit_rps
     }
 
+    pub fn reload_timeout_ms(&self) -> u64 {
+        self.performance.reload_timeout_ms
+    }
+
     pub fn stat_conf(&self) -> &StatConf {
         &self.stat_conf
     }
@@ -293,6 +329,10 @@ impl EngineConfig {
 
     pub fn semantic(&self) -> &SemanticConf {
         &self.semantic
+    }
+
+    pub fn project_remote(&self) -> &ProjectRemoteConf {
+        &self.project_remote
     }
 
     pub fn src_conf_of(&self, file_name: &str) -> String {
@@ -488,5 +528,49 @@ mod tests {
         .expect("parse config with relative knowledge root")
         .conf_absolutize("/work");
         assert_eq!(conf.knowledge_root(), "/work/custom/knowledge");
+    }
+
+    #[test]
+    fn test_project_remote_conf_accepts_fields() {
+        let conf: EngineConfig = toml::from_str(
+            r#"
+            [project_remote]
+            enabled = true
+            repo = "ssh://git@github.com/acme/wp-project.git"
+            init_version = "1.4.2"
+            "#,
+        )
+        .expect("parse config with project_remote");
+        assert!(conf.project_remote().enabled);
+        assert_eq!(
+            conf.project_remote().repo,
+            "ssh://git@github.com/acme/wp-project.git"
+        );
+        assert_eq!(conf.project_remote().init_version, "1.4.2");
+    }
+
+    #[test]
+    fn test_project_remote_conf_accepts_enable_key() {
+        let conf: EngineConfig = toml::from_str(
+            r#"
+            [project_remote]
+            enable = true
+            "#,
+        )
+        .expect("parse config with project_remote.enable");
+        assert!(conf.project_remote().enabled);
+    }
+
+    #[test]
+    fn test_engine_config_serializes_project_remote_as_snake_case() {
+        let toml = toml::to_string(&EngineConfig::default()).expect("serialize engine config");
+        assert!(
+            toml.contains("[project_remote]"),
+            "serialized config should use snake_case section name"
+        );
+        assert!(
+            !toml.contains("[project-remote]"),
+            "serialized config should not use kebab-case section name"
+        );
     }
 }

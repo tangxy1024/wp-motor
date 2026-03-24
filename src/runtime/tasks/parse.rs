@@ -2,10 +2,12 @@ use crate::core::parser::{ParseOption, WplPipeline};
 use crate::orchestrator::config::build_sinks::dat_channel_max;
 use crate::orchestrator::engine::resource::EngineResource;
 use crate::runtime::actor::TaskGroup;
+use crate::runtime::actor::TaskRole;
 use crate::runtime::actor::command::ActorCtrlCmd;
 use crate::runtime::actor::signal::ShutdownCmd;
 use crate::runtime::parser::act_parser::ActParser;
 use crate::runtime::parser::workflow::{ActorWork, ParseWorkerSender};
+use crate::runtime::reload_drain::ReloadDrainBus;
 use crate::sinks::{InfraSinkAgent, SinkRouteAgent};
 use crate::stat::MonSend;
 use crate::types::EventBatchRecv;
@@ -23,6 +25,7 @@ pub async fn start_parser_tasks_frames(
     resource: &EngineResource,
     mon_send: MonSend,
     stat_reqs: &StatRequires,
+    drain_bus: &ReloadDrainBus,
 ) -> RunResult<(Vec<ParseWorkerSender>, TaskGroup)> {
     let mut parser_group = TaskGroup::new("wpl-parse", ShutdownCmd::Timeout(200));
     let (infra, resc, sinks) = match (&resource.infra, &resource.resc, &resource.sinks) {
@@ -42,7 +45,7 @@ pub async fn start_parser_tasks_frames(
         infra.agent(),
     ));
 
-    for _ in 0..args.parallel {
+    for idx in 0..args.parallel {
         let (dat_s, dat_r): (EventBatchSend, EventBatchRecv) =
             hold_channel.channel(dat_channel_max());
         let actuator = match parser_factory.build().await {
@@ -56,12 +59,13 @@ pub async fn start_parser_tasks_frames(
         };
         // 使用通用的 ActorWork（定义在 runtime/parser/workflow.rs）
         // 代替在函数内部临时定义的 ActorFrameWork，避免重复与每轮循环重新定义类型。
-        let mut worker = ActorWork::new(
+        let mut worker = ActorWork::with_drain_reporter(
             "wparse-parse",
             dat_r,
             parser_group.subscribe(),
             mon_send.clone(),
             actuator,
+            drain_bus.reporter(TaskRole::Parser, format!("wparse-parse-{idx}")),
         );
         let reqs = stat_reqs.get_requ_items(StatStage::Parse);
         let setting = ParseOption::new(true, reqs);

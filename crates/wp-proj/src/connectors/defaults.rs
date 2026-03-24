@@ -46,9 +46,9 @@ fn ensure_factories_registered() {
         wp_core_connectors::startup::init_runtime_registries(
             wp_engine::sinks::register_builtin_factories,
             || {
-                wp_engine::sources::syslog::register_syslog_factory();
-                wp_engine::sources::tcp::register_tcp_factory();
-                wp_engine::sources::file::register_factory_only();
+                wp_core_connectors::sources::syslog::register_syslog_factory();
+                wp_core_connectors::sources::tcp::register_tcp_factory();
+                wp_core_connectors::sources::file::register_factory_only();
             },
         );
     });

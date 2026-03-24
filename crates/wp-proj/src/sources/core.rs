@@ -25,7 +25,7 @@ use crate::types::CheckStatus;
 
 /// Constants for default source configurations
 pub const DEFAULT_FILE_SOURCE_KEY: &str = "file_1";
-pub const DEFAULT_FILE_SOURCE_PATH: &str = "gen.dat";
+pub const DEFAULT_FILE_SOURCE_PATH: &str = "gen*.dat";
 pub const DEFAULT_SYSLOG_SOURCE_ID: &str = "syslog_1";
 pub const DEFAULT_SYSLOG_HOST: &str = "0.0.0.0";
 pub const DEFAULT_SYSLOG_PORT: i64 = 1514;
@@ -163,7 +163,7 @@ impl Sources {
 
     fn add_default_sources(&self, config: &mut WarpSources) -> RunResult<()> {
         let default_sources = vec![
-            // Add a default file source that reads from gen.dat
+            // Add a default file source that matches both gen.dat and sharded gen-r*.dat outputs
             source_builders::file_source(DEFAULT_FILE_SOURCE_KEY, DEFAULT_FILE_SOURCE_PATH),
             // Add a default syslog TCP source (disabled by default)
             source_builders::syslog_tcp_source(

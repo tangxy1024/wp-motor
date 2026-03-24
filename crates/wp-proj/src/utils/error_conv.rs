@@ -1,34 +1,34 @@
-///! 错误转换辅助模块
-///!
-///! 提供便捷的方法将 wp-cli-core 和 wp-config 的错误类型转换为 RunResult。
-///!
-///! # 设计原则
-///!
-///! - **wp-cli-core**: 使用 `anyhow::Result` (业务逻辑层)
-///! - **wp-config**: 使用 `OrionConfResult` (配置层)
-///! - **wp-proj**: 使用 `wp_error::RunResult` (应用层)
-///! - 错误转换在边界层（wp-proj）进行
-///!
-///! # 使用示例
-///!
-///! ```no_run
-///! use wp_proj::utils::error_conv::ResultExt;
-///! use wp_error::run_error::RunResult;
-///!
-///! fn my_function() -> RunResult<()> {
-///!     // 从 anyhow::Result 转换
-///!     some_anyhow_function()
-///!         .to_run_err("操作失败")?;
-///!
-///!     // 从 OrionConfResult 转换
-///!     some_config_function()
-///!         .to_run_err("配置加载失败")?;
-///!
-///!     Ok(())
-///! }
-///! # fn some_anyhow_function() -> anyhow::Result<()> { Ok(()) }
-///! # fn some_config_function() -> Result<(), orion_error::StructError<orion_conf::error::ConfIOReason>> { Ok(()) }
-///! ```
+//! 错误转换辅助模块
+//!
+//! 提供便捷的方法将 wp-cli-core 和 wp-config 的错误类型转换为 RunResult。
+//!
+//! # 设计原则
+//!
+//! - **wp-cli-core**: 使用 `anyhow::Result` (业务逻辑层)
+//! - **wp-config**: 使用 `OrionConfResult` (配置层)
+//! - **wp-proj**: 使用 `wp_error::RunResult` (应用层)
+//! - 错误转换在边界层（wp-proj）进行
+//!
+//! # 使用示例
+//!
+//! ```no_run
+//! use wp_proj::utils::error_conv::ResultExt;
+//! use wp_error::run_error::RunResult;
+//!
+//! fn my_function() -> RunResult<()> {
+//!     // 从 anyhow::Result 转换
+//!     some_anyhow_function()
+//!         .to_run_err("操作失败")?;
+//!
+//!     // 从 OrionConfResult 转换
+//!     some_config_function()
+//!         .to_run_err("配置加载失败")?;
+//!
+//!     Ok(())
+//! }
+//! # fn some_anyhow_function() -> anyhow::Result<()> { Ok(()) }
+//! # fn some_config_function() -> Result<(), orion_error::StructError<orion_conf::error::ConfIOReason>> { Ok(()) }
+//! ```
 use orion_error::{ToStructError, UvsFrom};
 use wp_error::run_error::{RunReason, RunResult};
 

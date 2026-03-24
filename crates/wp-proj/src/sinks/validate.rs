@@ -36,7 +36,9 @@ pub fn prepare_validate_context(
     let stats = stats_file.and_then(|p| load_stats_file(Path::new(p)));
     let input_from_sources =
         wp_cli_core::total_input_from_wpsrc(Path::new(&cm.work_root_path()), &main, &ctx, dict)
-            .filter(|n| *n > 0);
+            .owe_conf()
+            .with(cm.work_root_path())
+            .want("count total input from file sources")?;
     Ok(ValidateContext {
         groups,
         stats,

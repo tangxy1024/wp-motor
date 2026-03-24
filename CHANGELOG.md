@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.8] - 2026-03-24
+
+### Fixed
+- **Source/File Observability**: Align source statistics and total-input counting with the runtime-only `base + file` contract for file sources; observability paths now reject legacy `path` specs instead of silently accepting configs that runtime validation already forbids
+- **Validate/Total Input**: Stop silently falling back to `sum of sinks` when file-source total input cannot be determined reliably; `wproj data validate` now preserves `Some(0)` for empty files and fails explicitly on wildcard no-match or unreadable source files
+
 ## [1.19.7] - 2026-03-23
 
 ### Added

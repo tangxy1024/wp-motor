@@ -7,6 +7,8 @@ use std::fs;
 #[cfg(test)]
 use std::path::PathBuf;
 #[cfg(test)]
+use std::sync::{Mutex, OnceLock};
+#[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(test)]
 use wp_conf::test_support::ForTest;
@@ -199,6 +201,42 @@ fn cleanup_test_dir(work_root: &str) {
 }
 
 #[cfg(test)]
+fn admin_api_home_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
+#[cfg(test)]
+struct HomeOverride {
+    original: Option<std::ffi::OsString>,
+}
+
+#[cfg(test)]
+impl HomeOverride {
+    fn new(home: &std::path::Path) -> Self {
+        let original = std::env::var_os("HOME");
+        unsafe {
+            std::env::set_var("HOME", home);
+        }
+        Self { original }
+    }
+}
+
+#[cfg(test)]
+impl Drop for HomeOverride {
+    fn drop(&mut self) {
+        match &self.original {
+            Some(home) => unsafe {
+                std::env::set_var("HOME", home);
+            },
+            None => unsafe {
+                std::env::remove_var("HOME");
+            },
+        }
+    }
+}
+
+#[cfg(test)]
 #[cfg(test)]
 mod tests {
 
@@ -242,6 +280,45 @@ mod tests {
 
         println!("Empty dir - connectors: {:?}", connectors_result);
         println!("Empty dir - sinks: {:?}", sinks_result);
+
+        cleanup_test_dir(&work);
+    }
+
+    #[test]
+    fn test_load_warp_engine_confs_expands_admin_api_token_file_env() {
+        let work = uniq_tmp_dir();
+        create_minimal_project_structure(&work);
+        let _guard = admin_api_home_lock().lock().expect("lock HOME override");
+        let temp_home = PathBuf::from(&work).join("fake-home");
+        fs::create_dir_all(&temp_home).expect("create fake home");
+        let _home = HomeOverride::new(&temp_home);
+
+        fs::write(
+            format!("{}/conf/wparse.toml", work),
+            r#"version = "1.0"
+
+[admin_api]
+enabled = false
+
+[admin_api.auth]
+mode = "bearer_token"
+token_file = "${HOME}/.warp_parse/admin_api.token"
+"#,
+        )
+        .expect("write engine config");
+
+        let (_cm, conf) =
+            wp_engine::facade::config::load_warp_engine_confs(&work, &EnvDict::test_default())
+                .expect("load engine config");
+
+        assert_eq!(
+            conf.admin_api().auth.token_file,
+            temp_home
+                .join(".warp_parse")
+                .join("admin_api.token")
+                .display()
+                .to_string()
+        );
 
         cleanup_test_dir(&work);
     }

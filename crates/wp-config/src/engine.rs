@@ -31,6 +31,97 @@ impl EnvEvaluable<ProjectRemoteConf> for ProjectRemoteConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+pub struct AdminApiTlsConf {
+    #[serde(default, alias = "enable")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub cert_file: String,
+    #[serde(default)]
+    pub key_file: String,
+}
+
+impl Default for AdminApiTlsConf {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            cert_file: String::new(),
+            key_file: String::new(),
+        }
+    }
+}
+
+impl EnvEvaluable<AdminApiTlsConf> for AdminApiTlsConf {
+    fn env_eval(mut self, dict: &EnvDict) -> AdminApiTlsConf {
+        self.cert_file = self.cert_file.env_eval(dict);
+        self.key_file = self.key_file.env_eval(dict);
+        self
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+pub struct AdminApiAuthConf {
+    #[serde(default = "default_admin_api_auth_mode")]
+    pub mode: String,
+    #[serde(default = "default_admin_api_token_file")]
+    pub token_file: String,
+}
+
+impl Default for AdminApiAuthConf {
+    fn default() -> Self {
+        Self {
+            mode: default_admin_api_auth_mode(),
+            token_file: default_admin_api_token_file(),
+        }
+    }
+}
+
+impl EnvEvaluable<AdminApiAuthConf> for AdminApiAuthConf {
+    fn env_eval(mut self, dict: &EnvDict) -> AdminApiAuthConf {
+        self.mode = self.mode.env_eval(dict);
+        self.token_file = self.token_file.env_eval(dict);
+        self
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+pub struct AdminApiConf {
+    #[serde(default, alias = "enable")]
+    pub enabled: bool,
+    #[serde(default = "default_admin_api_bind")]
+    pub bind: String,
+    #[serde(default = "default_admin_api_request_timeout_ms")]
+    pub request_timeout_ms: u64,
+    #[serde(default = "default_admin_api_max_body_bytes")]
+    pub max_body_bytes: usize,
+    #[serde(default)]
+    pub tls: AdminApiTlsConf,
+    #[serde(default)]
+    pub auth: AdminApiAuthConf,
+}
+
+impl Default for AdminApiConf {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bind: default_admin_api_bind(),
+            request_timeout_ms: default_admin_api_request_timeout_ms(),
+            max_body_bytes: default_admin_api_max_body_bytes(),
+            tls: AdminApiTlsConf::default(),
+            auth: AdminApiAuthConf::default(),
+        }
+    }
+}
+
+impl EnvEvaluable<AdminApiConf> for AdminApiConf {
+    fn env_eval(mut self, dict: &EnvDict) -> AdminApiConf {
+        self.bind = self.bind.env_eval(dict);
+        self.tls = self.tls.env_eval(dict);
+        self.auth = self.auth.env_eval(dict);
+        self
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct RescueConf {
     #[serde(default = "default_rescue_path")]
     pub path: String,
@@ -142,6 +233,8 @@ pub struct EngineConfig {
     /// 远程规则版本更新配置（默认关闭）
     #[serde(default)]
     project_remote: ProjectRemoteConf,
+    #[serde(default)]
+    admin_api: AdminApiConf,
 }
 
 impl EnvEvaluable<EngineConfig> for EngineConfig {
@@ -150,6 +243,7 @@ impl EnvEvaluable<EngineConfig> for EngineConfig {
         self.topology = self.topology.env_eval(dict);
         self.rescue = self.rescue.env_eval(dict);
         self.project_remote = self.project_remote.env_eval(dict);
+        self.admin_api = self.admin_api.env_eval(dict);
         self
     }
 }
@@ -195,6 +289,26 @@ pub fn default_reload_timeout_ms() -> u64 {
     10_000
 }
 
+pub fn default_admin_api_bind() -> String {
+    "127.0.0.1:19090".to_string()
+}
+
+pub fn default_admin_api_request_timeout_ms() -> u64 {
+    15_000
+}
+
+pub fn default_admin_api_max_body_bytes() -> usize {
+    4096
+}
+
+pub fn default_admin_api_auth_mode() -> String {
+    "bearer_token".to_string()
+}
+
+pub fn default_admin_api_token_file() -> String {
+    "${HOME}/.warp_parse/admin_api.token".to_string()
+}
+
 pub fn default_topology_conf() -> TopologyConf {
     TopologyConf {
         sources: default_sources_root(),
@@ -225,6 +339,7 @@ impl Default for EngineConfig {
             skip_sink: false,
             semantic: SemanticConf::default(),
             project_remote: ProjectRemoteConf::default(),
+            admin_api: AdminApiConf::default(),
         }
     }
 }
@@ -258,6 +373,7 @@ impl EngineConfig {
             skip_sink: false,
             semantic: SemanticConf::default(),
             project_remote: ProjectRemoteConf::default(),
+            admin_api: AdminApiConf::default(),
         }
     }
 
@@ -335,6 +451,10 @@ impl EngineConfig {
         &self.project_remote
     }
 
+    pub fn admin_api(&self) -> &AdminApiConf {
+        &self.admin_api
+    }
+
     pub fn src_conf_of(&self, file_name: &str) -> String {
         format!("{}/{}", self.src_root(), file_name)
     }
@@ -347,6 +467,18 @@ impl EngineConfig {
         self.topology.sources = resolve_engine_path(self.topology.sources.as_str(), abs_work_root);
         self.topology.sinks = resolve_engine_path(self.topology.sinks.as_str(), abs_work_root);
         self.rescue.path = resolve_engine_path(self.rescue.path.as_str(), abs_work_root);
+        if !self.admin_api.tls.cert_file.is_empty() {
+            self.admin_api.tls.cert_file =
+                resolve_engine_path(self.admin_api.tls.cert_file.as_str(), abs_work_root);
+        }
+        if !self.admin_api.tls.key_file.is_empty() {
+            self.admin_api.tls.key_file =
+                resolve_engine_path(self.admin_api.tls.key_file.as_str(), abs_work_root);
+        }
+        if !self.admin_api.auth.token_file.is_empty() {
+            self.admin_api.auth.token_file =
+                resolve_engine_path(self.admin_api.auth.token_file.as_str(), abs_work_root);
+        }
         self
     }
 
@@ -436,6 +568,39 @@ fn normalize_path(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Mutex, OnceLock};
+
+    fn home_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    struct HomeOverride {
+        original: Option<std::ffi::OsString>,
+    }
+
+    impl HomeOverride {
+        fn new(home: &Path) -> Self {
+            let original = std::env::var_os("HOME");
+            unsafe {
+                std::env::set_var("HOME", home);
+            }
+            Self { original }
+        }
+    }
+
+    impl Drop for HomeOverride {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(home) => unsafe {
+                    std::env::set_var("HOME", home);
+                },
+                None => unsafe {
+                    std::env::remove_var("HOME");
+                },
+            }
+        }
+    }
 
     #[test]
     fn test_normalize_path_removes_current_dir() {
@@ -571,6 +736,56 @@ mod tests {
         assert!(
             !toml.contains("[project-remote]"),
             "serialized config should not use kebab-case section name"
+        );
+    }
+
+    #[test]
+    fn test_admin_api_token_file_env_eval_uses_home() {
+        let _guard = home_lock().lock().expect("lock HOME override");
+        let temp = tempfile::tempdir().expect("create temp home");
+        let _home = HomeOverride::new(temp.path());
+
+        let conf = EngineConfig::default()
+            .env_eval(&orion_variate::EnvDict::new())
+            .conf_absolutize("/work");
+
+        assert_eq!(
+            conf.admin_api().auth.token_file,
+            temp.path()
+                .join(".warp_parse")
+                .join("admin_api.token")
+                .display()
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn test_conf_absolutize_resolves_admin_api_relative_paths() {
+        let conf = EngineConfig {
+            admin_api: AdminApiConf {
+                enabled: true,
+                bind: default_admin_api_bind(),
+                request_timeout_ms: default_admin_api_request_timeout_ms(),
+                max_body_bytes: default_admin_api_max_body_bytes(),
+                tls: AdminApiTlsConf {
+                    enabled: true,
+                    cert_file: "./tls/server.crt".to_string(),
+                    key_file: "./tls/server.key".to_string(),
+                },
+                auth: AdminApiAuthConf {
+                    mode: default_admin_api_auth_mode(),
+                    token_file: "runtime/admin_api.token".to_string(),
+                },
+            },
+            ..EngineConfig::default()
+        }
+        .conf_absolutize("/work");
+
+        assert_eq!(conf.admin_api().tls.cert_file, "/work/tls/server.crt");
+        assert_eq!(conf.admin_api().tls.key_file, "/work/tls/server.key");
+        assert_eq!(
+            conf.admin_api().auth.token_file,
+            "/work/runtime/admin_api.token"
         );
     }
 }

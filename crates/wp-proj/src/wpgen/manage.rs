@@ -80,6 +80,7 @@ mod tests {
 
     use super::*;
     use crate::project::{WarpProject, init::PrjScope};
+    use crate::wpgen::gen_conf_init;
     use crate::wpgen::load_wpgen_resolved;
     use wp_engine::facade::config::WarpConf;
 
@@ -104,6 +105,11 @@ mod tests {
         project
             .init_basic(PrjScope::Full)
             .assert("init project with connectors");
+
+        let wpgen_conf = case_path.path().join("conf/wpgen.toml");
+        if !wpgen_conf.exists() {
+            gen_conf_init(case_path.path()).expect("init wpgen config");
+        }
 
         let god = WarpConf::new(case_path.path());
         let resolved = load_wpgen_resolved("wpgen.toml", &god, &EnvDict::test_default())

@@ -12,7 +12,7 @@ arcstr = { workspace = true }
 winnow = { workspace = true }
 orion-error = { workspace = true }
 orion_conf= { workspace = true }
-wp_knowledge = { package = "wp-knowledge", version = "0.10" }
+wp_knowledge = { package = "wp-knowledge", version = "0.11" }
 wp_primitives = { workspace = true }
 wp_condition = { package = "wp-condition", path = "../wp-condition" }
 orion_exp = { path = "../orion_exp" }
@@ -47,6 +47,7 @@ html-escape = { workspace = true }
 escape8259 = { workspace = true }
 lazy_static = { workspace = true }
 async-trait = { workspace = true }
+tokio = { workspace = true }
 once_cell = { workspace = true }
 parse-display = { workspace = true }
 parse-display-derive = { workspace = true }
@@ -63,6 +64,9 @@ env_logger = { workspace = true }
 mockall = { workspace = true }
 orion-variate = { workspace = true }
 tempfile.workspace = true
+tokio = { workspace = true }
+tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-serde_json-1"] }
+mysql = "28.0.0"
 wp_config = { workspace = true }
 
 

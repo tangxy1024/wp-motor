@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Knowledge/Stats**: Bridge `wp-knowledge` runtime telemetry into `wp-stats`, exposing knowledge DB reload/cache/query counters and query-latency bucket stats through the existing monitor pipeline
+
+### Changed
+- **Dependencies/Knowledge**: Align workspace consumers, including `wp-proj`, to the local path `wp-knowledge` dependency so runtime telemetry uses one shared crate instance across `wp-motor`
+- **OML/Async**: Make OML model loading use async file reads, run async transform paths through the async evaluator consistently, and remove unused internal sync evaluator skeletons from the production path
+
+### Fixed
+- **OML/Static**: Reject `static { ... }` blocks that reference other static symbols during parsing instead of leaving them as runtime failures
+- **OML/Diagnostics**: Make `oml-diag` collection task-aware under async execution so diagnostic reset/push/take stay aligned with the same transform request
+
 ## [1.19.9] - 2026-03-24
 
 ### Fixed

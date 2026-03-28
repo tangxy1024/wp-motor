@@ -366,7 +366,12 @@ fn oml_async_postgres_provider_cache_concurrency() {
     let ops = perf_env_usize("WP_KDB_PERF_OPS", 20_000).max(1);
     let hotset = perf_env_usize("WP_KDB_PERF_HOTSET", 128).clamp(1, rows);
     let concurrencies = perf_concurrency_levels();
-    let worker_threads = concurrencies.iter().copied().max().unwrap_or(1).clamp(2, 16);
+    let worker_threads = concurrencies
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(1)
+        .clamp(2, 16);
 
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(worker_threads)
@@ -433,7 +438,12 @@ fn oml_async_mysql_provider_cache_concurrency() {
     let ops = perf_env_usize("WP_KDB_PERF_OPS", 20_000).max(1);
     let hotset = perf_env_usize("WP_KDB_PERF_HOTSET", 128).clamp(1, rows);
     let concurrencies = perf_concurrency_levels();
-    let worker_threads = concurrencies.iter().copied().max().unwrap_or(1).clamp(2, 16);
+    let worker_threads = concurrencies
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or(1)
+        .clamp(2, 16);
 
     seed_mysql(&url, rows);
 

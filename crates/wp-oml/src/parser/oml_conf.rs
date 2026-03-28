@@ -206,16 +206,12 @@ fn static_block_err(reason: &'static str) -> Result<(), ErrMode<ContextError>> {
     Err(ErrMode::Cut(err))
 }
 
-fn ensure_static_precise_supported(
-    eval: &PreciseEvaluator,
-) -> Result<(), ErrMode<ContextError>> {
+fn ensure_static_precise_supported(eval: &PreciseEvaluator) -> Result<(), ErrMode<ContextError>> {
     match eval {
         PreciseEvaluator::StaticSymbol(_) => {
             static_block_err("static block does not support referencing other static symbols")
         }
-        PreciseEvaluator::Obj(_)
-        | PreciseEvaluator::ObjArc(_)
-        | PreciseEvaluator::Val(_) => Ok(()),
+        PreciseEvaluator::Obj(_) | PreciseEvaluator::ObjArc(_) | PreciseEvaluator::Val(_) => Ok(()),
         PreciseEvaluator::Calc(op) => ensure_static_calc_expr_supported(op.expr()),
         PreciseEvaluator::Map(op) => {
             for binding in op.subs() {
@@ -226,9 +222,7 @@ fn ensure_static_precise_supported(
         PreciseEvaluator::Sql(_) => {
             static_block_err("static block does not support SQL queries or external effects")
         }
-        PreciseEvaluator::Tdc(_)
-        | PreciseEvaluator::Pipe(_)
-        | PreciseEvaluator::Collect(_) => {
+        PreciseEvaluator::Tdc(_) | PreciseEvaluator::Pipe(_) | PreciseEvaluator::Collect(_) => {
             static_block_err("static block does not support read/take-based runtime access")
         }
         PreciseEvaluator::Fun(_) => {
@@ -237,9 +231,9 @@ fn ensure_static_precise_supported(
         PreciseEvaluator::Fmt(_) => {
             static_block_err("static block does not support runtime formatting access")
         }
-        PreciseEvaluator::Match(_) | PreciseEvaluator::Lookup(_) => static_block_err(
-            "static block only supports pure literal/object expressions",
-        ),
+        PreciseEvaluator::Match(_) | PreciseEvaluator::Lookup(_) => {
+            static_block_err("static block only supports pure literal/object expressions")
+        }
     }
 }
 
@@ -269,7 +263,8 @@ fn ensure_static_nested_accessor_supported(
         crate::language::NestedAccessor::StaticSymbol(_) => {
             static_block_err("static block does not support referencing other static symbols")
         }
-        crate::language::NestedAccessor::Direct(_) | crate::language::NestedAccessor::Collect(_) => {
+        crate::language::NestedAccessor::Direct(_)
+        | crate::language::NestedAccessor::Collect(_) => {
             static_block_err("static block does not support read/take-based runtime access")
         }
         crate::language::NestedAccessor::Fun(_) => {

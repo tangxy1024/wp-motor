@@ -73,16 +73,29 @@ file = "example.oml"
 description = "Example OML model for demonstration purposes"
 rule = "/example/*"
 "#;
+        let postgres_knowdb_content = r#"# OML Knowledge Database Configuration
+# PostgreSQL provider example. Rename this file to knowdb.toml after filling in
+# a real connection string if you want wp-knowledge to query PostgreSQL directly.
+
+version = 2
+
+[provider]
+kind = "postgres"
+connection_uri = "postgres://user:password@127.0.0.1:5432/app_db"
+allowed_tables = ["cipher_demo", "zone"]
+"#;
 
         // Write all files using the initializer
         initializer.write_files(&[
             ("example.oml", example_oml_content),
             ("knowdb.toml", knowdb_content),
+            ("knowdb.postgres.toml", postgres_knowdb_content),
         ])?;
 
         println!("Created example OML files:");
         println!("  - {:?}", oml_dir.join("example.oml"));
         println!("  - {:?}", oml_dir.join("knowdb.toml"));
+        println!("  - {:?}", oml_dir.join("knowdb.postgres.toml"));
 
         Ok(())
     }
@@ -158,7 +171,11 @@ mod tests {
         oml.init_with_examples().expect("init examples");
 
         let example_file = temp.path().join("models/oml/example.oml");
+        let postgres_file = temp.path().join("models/oml/knowdb.postgres.toml");
         assert!(example_file.exists());
+        assert!(postgres_file.exists());
+        let body = std::fs::read_to_string(postgres_file).expect("read postgres knowdb template");
+        assert!(body.contains("kind = \"postgres\""));
         assert!(!temp.path().join("models/oml/*.oml").exists());
     }
 }

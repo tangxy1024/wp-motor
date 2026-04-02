@@ -113,7 +113,8 @@ impl StatRecorder<Option<&DataRecord>> for MetricCollectors {
                 let (items, groups) = (&mut self.items, &self.data_groups);
                 for group in groups.iter() {
                     if let Some((last, rest)) = group.indices.split_last() {
-                        let data = extract_metric_dimensions_with_target(tdo, group.collect.as_slice());
+                        let data =
+                            extract_metric_dimensions_with_target(tdo, group.collect.as_slice());
                         for idx in rest {
                             items[*idx].record_begin(target, data.clone());
                         }
@@ -155,7 +156,8 @@ impl StatRecorder<Option<&DataRecord>> for MetricCollectors {
                 let (items, groups) = (&mut self.items, &self.data_groups);
                 for group in groups.iter() {
                     if let Some((last, rest)) = group.indices.split_last() {
-                        let data = extract_metric_dimensions_with_target(tdo, group.collect.as_slice());
+                        let data =
+                            extract_metric_dimensions_with_target(tdo, group.collect.as_slice());
                         for idx in rest {
                             items[*idx].record_end(rule, data.clone());
                         }
@@ -181,7 +183,8 @@ impl StatRecorder<Option<&DataRecord>> for MetricCollectors {
                 let (items, groups) = (&mut self.items, &self.data_groups);
                 for group in groups.iter() {
                     if let Some((last, rest)) = group.indices.split_last() {
-                        let data = extract_metric_dimensions_with_target(tdo, group.collect.as_slice());
+                        let data =
+                            extract_metric_dimensions_with_target(tdo, group.collect.as_slice());
                         for idx in rest {
                             items[*idx].record_task(rule, data.clone());
                         }
@@ -509,7 +512,10 @@ mod tests {
 
         let report = collectors.items[0].collect_stat();
         assert_eq!(report.get_data().len(), 1);
-        assert_eq!(report.get_data()[0].get_value().to_string(), "residue,residue");
+        assert_eq!(
+            report.get_data()[0].get_value().to_string(),
+            "residue,residue"
+        );
         assert_eq!(report.get_data()[0].stat.total, 1);
         assert_eq!(report.get_data()[0].stat.success, 1);
     }

@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - "*"
+      - "hotfix/*"
     tags:
       - "*"
   pull_request:
     branches:
       - "*"
+      - "hotfix/*"
 
 env:
   CARGO_TERM_COLOR: always

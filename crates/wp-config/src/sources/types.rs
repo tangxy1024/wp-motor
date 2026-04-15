@@ -11,6 +11,7 @@ pub type SrcConnectorFileRec = ConnectorTomlFile;
 pub type SourceConnector = ConnectorDef;
 
 #[derive(Debug, Clone, Deserialize, Serialize, WithSetters)]
+#[serde(deny_unknown_fields)]
 pub struct WpSource {
     pub key: String,
     #[set_with = "pub"]
@@ -37,6 +38,7 @@ impl EnvEvaluable<WpSource> for WpSource {
 pub type SourceItem = WpSource;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct WpSourcesConfig {
     #[serde(default)]
     pub sources: Vec<WpSource>,

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone, derive_getters::Getters, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SinkExpectOverride {
     /// 目标占比（0..=1）
     #[serde(default)]
@@ -52,5 +53,23 @@ impl SinkExpectOverride {
             bail!("expect: ratio/tol cannot be combined with min/max; choose one style");
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sink_expect_override_rejects_unknown_fields() {
+        let err = toml::from_str::<SinkExpectOverride>(
+            r#"
+            ration = 0.5
+            "#,
+        )
+        .expect_err("unknown expect fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("ration"));
     }
 }

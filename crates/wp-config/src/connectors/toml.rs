@@ -142,6 +142,26 @@ file = "result.dat"
     }
 
     #[test]
+    fn load_connector_rejects_unknown_top_level_table() {
+        let base = tmp_dir("conn_unknown_top");
+        let cdir = base.join("connectors").join("sink.d");
+        fs::create_dir_all(&cdir).unwrap();
+
+        let connector_toml = r#"
+[[connector]]
+id = "file_sink"
+type = "file"
+"#;
+        fs::write(cdir.join("bad.toml"), connector_toml).unwrap();
+
+        let err = load_connector_defs_from_dir(&cdir, ConnectorScope::Sink, &EnvDict::new())
+            .expect_err("unknown top-level connector table should fail")
+            .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("connector"));
+    }
+
+    #[test]
     fn load_connector_with_undefined_env_keeps_placeholder() {
         let base = tmp_dir("conn_undefined");
         let cdir = base.join("connectors").join("sink.d");

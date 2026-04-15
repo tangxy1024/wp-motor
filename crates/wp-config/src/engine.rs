@@ -13,6 +13,7 @@ use crate::stat::StatConf;
 impl EngineConfig {}
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct ProjectRemoteConf {
     #[serde(default, alias = "enable")]
     pub enabled: bool,
@@ -31,6 +32,7 @@ impl EnvEvaluable<ProjectRemoteConf> for ProjectRemoteConf {
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct AdminApiTlsConf {
     #[serde(default, alias = "enable")]
     pub enabled: bool,
@@ -49,6 +51,7 @@ impl EnvEvaluable<AdminApiTlsConf> for AdminApiTlsConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct AdminApiAuthConf {
     #[serde(default = "default_admin_api_auth_mode")]
     pub mode: String,
@@ -74,6 +77,7 @@ impl EnvEvaluable<AdminApiAuthConf> for AdminApiAuthConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct AdminApiConf {
     #[serde(default, alias = "enable")]
     pub enabled: bool,
@@ -112,6 +116,7 @@ impl EnvEvaluable<AdminApiConf> for AdminApiConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct RescueConf {
     #[serde(default = "default_rescue_path")]
     pub path: String,
@@ -133,6 +138,7 @@ impl EnvEvaluable<RescueConf> for RescueConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct ModelsConf {
     #[serde(default = "default_wpl_root")]
     pub wpl: String,
@@ -152,6 +158,7 @@ impl EnvEvaluable<ModelsConf> for ModelsConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct TopologyConf {
     #[serde(default = "default_sources_root")]
     pub sources: String,
@@ -168,6 +175,7 @@ impl EnvEvaluable<TopologyConf> for TopologyConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct PerformanceConf {
     #[serde(default = "default_speed_limit")]
     pub rate_limit_rps: usize,
@@ -187,12 +195,14 @@ impl Default for PerformanceConf {
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct SemanticConf {
     #[serde(default, alias = "enable")]
     pub enabled: bool,
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct EngineConfig {
     #[serde(default = "default_version")]
     version: String,
@@ -225,6 +235,20 @@ pub struct EngineConfig {
     project_remote: ProjectRemoteConf,
     #[serde(default)]
     admin_api: AdminApiConf,
+    /// Legacy sections accepted for compatibility with older project files.
+    /// They are intentionally ignored by the current runtime schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    general: Option<toml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    log: Option<toml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rule: Option<toml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source: Option<toml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sink: Option<toml::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    oml: Option<toml::Value>,
 }
 
 impl EnvEvaluable<EngineConfig> for EngineConfig {
@@ -330,6 +354,12 @@ impl Default for EngineConfig {
             semantic: SemanticConf::default(),
             project_remote: ProjectRemoteConf::default(),
             admin_api: AdminApiConf::default(),
+            general: None,
+            log: None,
+            rule: None,
+            source: None,
+            sink: None,
+            oml: None,
         }
     }
 }
@@ -364,6 +394,12 @@ impl EngineConfig {
             semantic: SemanticConf::default(),
             project_remote: ProjectRemoteConf::default(),
             admin_api: AdminApiConf::default(),
+            general: None,
+            log: None,
+            rule: None,
+            source: None,
+            sink: None,
+            oml: None,
         }
     }
 
@@ -658,6 +694,60 @@ mod tests {
         )
         .expect("parse config with semantic.enable");
         assert!(conf.semantic().enabled);
+    }
+
+    #[test]
+    fn test_engine_config_rejects_unknown_top_level_field() {
+        let err = toml::from_str::<EngineConfig>(
+            r#"
+            versoin = "1.0"
+            "#,
+        )
+        .expect_err("unknown top-level fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("versoin"));
+    }
+
+    #[test]
+    fn test_engine_config_accepts_legacy_sections() {
+        let conf = toml::from_str::<EngineConfig>(
+            r#"
+            [general]
+            work_root = "."
+
+            [log]
+            level = "info"
+
+            [rule]
+            root = "./models/wpl"
+
+            [source]
+            root = "./topology/sources"
+
+            [sink]
+            root = "./models/sinks"
+
+            [oml]
+            root = "./models/oml"
+            "#,
+        )
+        .expect("known legacy sections should remain loadable");
+        assert_eq!(conf.sink_root(), default_sinks_root());
+    }
+
+    #[test]
+    fn test_engine_config_rejects_unknown_nested_field() {
+        let err = toml::from_str::<EngineConfig>(
+            r#"
+            [performance]
+            parse_worker = 4
+            "#,
+        )
+        .expect_err("unknown nested fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("parse_worker"));
     }
 
     #[test]

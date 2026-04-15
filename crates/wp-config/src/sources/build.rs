@@ -230,10 +230,40 @@ mod tests {
         let raw = r#"[[sources]]
 key = "s1"
 connect = "conn1"
-[connectors]
 "#;
         // 最小解析：不校验 connectors（仅返回 name/tags）
         let _ = parse_and_validate_only(raw, &EnvDict::test_default()).expect("parse");
+    }
+
+    #[test]
+    fn parse_rejects_unknown_top_level_connectors_table() {
+        let raw = r#"[[connectors]]
+key = "s1"
+enable = true
+connect = "conn1"
+[connectors.params]
+addr = "127.0.0.1"
+"#;
+        let err = parse_and_validate_only(raw, &EnvDict::test_default())
+            .expect_err("unknown top-level connectors table should fail")
+            .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("connectors"));
+    }
+
+    #[test]
+    fn parse_rejects_unknown_source_field() {
+        let raw = r#"[[sources]]
+key = "s1"
+enable = true
+connect = "conn1"
+connector = "typo"
+"#;
+        let err = parse_and_validate_only(raw, &EnvDict::test_default())
+            .expect_err("unknown source field should fail")
+            .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("connector"));
     }
 
     #[test]

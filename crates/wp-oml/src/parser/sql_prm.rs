@@ -318,8 +318,7 @@ fn find_top_level_in_keyword(input: &str) -> Option<usize> {
             let c2 = bytes[idx + 1].to_ascii_lowercase();
             if c1 == b'i' && c2 == b'n' {
                 let prev_ok = idx > 0
-                    && ((bytes[idx - 1] as char).is_ascii_whitespace()
-                        || bytes[idx - 1] == b')');
+                    && ((bytes[idx - 1] as char).is_ascii_whitespace() || bytes[idx - 1] == b')');
                 if !prev_ok {
                     idx += 1;
                     continue;
@@ -505,7 +504,11 @@ mod tests {
         let mut code = r#" select group_concat(distinct asset_type) from asset_enrichment where ip in (@sip, @dip) ;"#;
         let parsed = oml_sql.parse_next(&mut code)?;
         assert_eq!(
-            parsed.oml_sql().split_whitespace().collect::<Vec<_>>().join(" "),
+            parsed
+                .oml_sql()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
             "select group_concat(distinct asset_type) from asset_enrichment where ip IN (:sip, :dip)"
         );
         assert!(parsed.vars().contains_key("sip"));
@@ -516,11 +519,14 @@ mod tests {
     #[tokio::test(flavor = "current_thread")]
     async fn test_oml_sql_group_concat_in_ref_without_space_before_paren() -> ModalResult<()> {
         super::set_sql_strict_for_test(Some(true));
-        let mut code =
-            r#" select group_concat(distinct asset_type) from asset_enrichment where ip in(@sip, @dip) ;"#;
+        let mut code = r#" select group_concat(distinct asset_type) from asset_enrichment where ip in(@sip, @dip) ;"#;
         let parsed = oml_sql.parse_next(&mut code)?;
         assert_eq!(
-            parsed.oml_sql().split_whitespace().collect::<Vec<_>>().join(" "),
+            parsed
+                .oml_sql()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
             "select group_concat(distinct asset_type) from asset_enrichment where ip IN (:sip, :dip)"
         );
         assert!(parsed.vars().contains_key("sip"));

@@ -763,19 +763,11 @@ async fn test_sql_debug() -> AnyResult<()> {
 async fn test_sql_group_concat_in_with_oml_refs() -> AnyResult<()> {
     let cache = &mut FieldQueryCache::default();
     let db = MemDB::global();
-    db.table_create(
-        "CREATE TABLE IF NOT EXISTS asset_enrichment (ip TEXT, asset_type TEXT)",
-    )?;
+    db.table_create("CREATE TABLE IF NOT EXISTS asset_enrichment (ip TEXT, asset_type TEXT)")?;
     db.execute("DELETE FROM asset_enrichment")?;
-    db.execute(
-        "INSERT INTO asset_enrichment (ip, asset_type) VALUES ('1.1.1.1', 'server')",
-    )?;
-    db.execute(
-        "INSERT INTO asset_enrichment (ip, asset_type) VALUES ('2.2.2.2', 'db')",
-    )?;
-    db.execute(
-        "INSERT INTO asset_enrichment (ip, asset_type) VALUES ('2.2.2.2', 'server')",
-    )?;
+    db.execute("INSERT INTO asset_enrichment (ip, asset_type) VALUES ('1.1.1.1', 'server')")?;
+    db.execute("INSERT INTO asset_enrichment (ip, asset_type) VALUES ('2.2.2.2', 'db')")?;
+    db.execute("INSERT INTO asset_enrichment (ip, asset_type) VALUES ('2.2.2.2', 'server')")?;
     let _ = wp_knowledge::facade::init_mem_provider(db);
 
     let mut conf = r#"

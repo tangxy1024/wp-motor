@@ -93,9 +93,7 @@ allow_override = ["path","fmt","base","file"]
         fs::create_dir_all(sink_root).unwrap();
         fs::write(
             p,
-            r#"version = "2.0"
-
-[defaults]
+            r#"[defaults]
 
 [defaults.expect]
 basis = "total_input"

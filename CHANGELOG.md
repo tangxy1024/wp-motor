@@ -5,109 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.19.16] - 2026-04-02
-
-### Fixed
-- **Clippy/WPL Pipeline**: Add an explicit `clippy::too_many_arguments` allowance on `WplPipeline::new` so the current constructor shape no longer blocks workspace lint/build flows
-
-## [1.19.13] - 2026-03-31
+## [1.20.0] - 2026-04-11
 
 ### Added
-- **Monitoring/Fixed Labels**: Add fixed-label propagation across parser, runtime picker, sink manager, sources, and `wp-stats` metric collection so monitoring series can carry stable routing and component metadata without rebuilding labels at each emission point
+- **Sinks/Arrow**: Add `arrow-file` sink for local length-prefixed Arrow IPC frame output, and add `arrow_file_sink` and `arrow_tcp_sink` templates to project initialization
+- **OML/Functions**: Add `iequals_any(...)`, `lookup_nocase(dict, key, default)`, and `calc(...)` with `+ - * / %` and `abs/round/floor/ceil`
+- **Runtime Control**: Add structured `LoadModel` runtime command handling with status snapshots and single-flight reload coordination for host/admin integration
+- **Runtime Config**: Add `reload_timeout_ms`, available from CLI `--reload-timeout-ms` and `wparse.toml` `[performance].reload_timeout_ms`
+- **Source/File**: Allow wildcard patterns in `file` while preserving matched file order
+- **Monitoring/Stats**: Add fixed-label propagation across the runtime metrics pipeline and expose `wp-knowledge` reload/cache/query telemetry through `wp-stats`
 
 ### Changed
-- **Monitoring/Tag Names**: Standardize internal metric tag naming across pipeline, runtime post path, sources, sinks, and stats collectors so the same logical labels are emitted consistently by all runtime components
-- **Dependencies/Workspace**: Clean unused workspace dependencies, keep only required crate references in root and member manifests, and update `ctor` compatibility to `0.8`
+- **Runtime/Reload Flow**: Replace fixed-wait reload with event-driven drain coordination and return structured reload results for runtime/admin control flows
+- **Source/File Contract**: Standardize runtime file-source configuration on `base + file`, keep wildcard support limited to `file`, and process matched files sequentially
+- **Admin API/Auth**: Move the default bearer token location to `${HOME}/.warp_parse/admin_api.token`, with work-root fallback when `HOME` is unavailable
+- **Config/Knowledge**: Add `[models].knowledge` as the configurable root for knowdb and semantic dictionary files while preserving legacy semantic dictionary fallback
+- **OML/Async**: Switch OML model loading and async transform execution onto the async evaluator path consistently
+- **Runtime/Backpressure**: Lower default parser and sink channel capacities to `128` and `64` so backpressure applies earlier under sustained load
+- **Monitoring/Tags**: Standardize metric tag naming across pipeline, sources, sinks, and stats collectors
+- **wp-proj/Demo Template**: Update generated demo source configuration from `gen.dat` to `gen*.dat` so project templates match both single-file and sharded wpgen output
 
 ### Fixed
-- **OML/Parser**: Split oversized `winnow::alt(...)` branches in the OML pipe-function parser so the workspace builds cleanly against current `winnow 1.0` tuple arity limits
-- **wp-proj/OML Init**: Resolve the OML project-template merge so project initialization creates the expected example OML file without leaving conflict markers in the generated model path
-
-## [1.19.11] - 2026-03-29
-
-### Added
-- **Knowledge/Stats**: Bridge `wp-knowledge` runtime telemetry into `wp-stats`, exposing knowledge DB reload/cache/query counters and query-latency bucket stats through the existing monitor pipeline
-
-### Changed
-- **Dependencies/Knowledge**: Align workspace consumers, including `wp-proj`, to the local path `wp-knowledge` dependency so runtime telemetry uses one shared crate instance across `wp-motor`
-- **OML/Async**: Make OML model loading use async file reads, run async transform paths through the async evaluator consistently, and remove unused internal sync evaluator skeletons from the production path
-- **Runtime/Backpressure**: Lower the default parser and sink channel capacities to `128` and `64` so backpressure is applied earlier and peak in-process buffering stays lower under sustained input load
-
-### Fixed
-- **Realtime/Pending**: Bound realtime picker backlog by bytes so source fetch pauses once pending payload volume reaches the configured watermark instead of continuing to accumulate parser-side memory
-- **TCP/Memory**: Upgrade runtime source connectors to `wp-core-connectors 0.1.3`, bringing TCP reader-side pending-byte backpressure and lower default reader batch queue sizing to reduce memory growth under high EPS input
-- **OML/Static**: Reject `static { ... }` blocks that reference other static symbols during parsing instead of leaving them as runtime failures
-- **OML/Diagnostics**: Make `oml-diag` collection task-aware under async execution so diagnostic reset/push/take stay aligned with the same transform request
-
-## [1.19.9] - 2026-03-24
-
-### Fixed
-- **Admin API/Auth**: Apply the normal `env_eval + conf_absolutize` pipeline to all engine-config loading paths so `${HOME}` in `admin_api.auth.token_file` is expanded consistently in daemon/runtime validation flows instead of being treated as a work-root-relative path
-- **wpgen/Clean**: Make `wpgen data clean` remove file-sink shard outputs like `gen-r*.dat` in addition to the primary file path, and harden the wpgen clean test setup so it no longer depends on incidental `wpgen.toml` creation side effects
-
-## [1.19.8] - 2026-03-24
-
-### Fixed
-- **Source/File Observability**: Align source statistics and total-input counting with the runtime-only `base + file` contract for file sources; observability paths now reject legacy `path` specs instead of silently accepting configs that runtime validation already forbids
-- **Validate/Total Input**: Stop silently falling back to `sum of sinks` when file-source total input cannot be determined reliably; `wproj data validate` now preserves `Some(0)` for empty files and fails explicitly on wildcard no-match or unreadable source files
-
-## [1.19.7] - 2026-03-23
-
-### Added
-- **Runtime/Reload Timeout**: Add explicit `reload_timeout_ms` runtime parameter, available from CLI `--reload-timeout-ms` and `wparse.toml` `[performance].reload_timeout_ms`
-- **Source/File**: Allow file sources to use wildcard patterns in `file` while preserving file-name order across matched files
-
-### Changed
-- **Runtime/Reload**: Replace the old fixed-wait reload path with event-driven drain coordination for parser, sink, and infra workers; reload now returns as soon as the old generation is quiesced, while `reload_timeout_ms` remains only as a fallback deadline
-- **Runtime/Reload Naming**: Rename the reload drain coordination types to `ReloadDrainBus`, `ReloadDrainReporter`, `ReloadDrainEvent`, and `ReloadDrainTracker` for clearer role semantics
-- **Admin API/Auth**: Move the default bearer token location from project-local `runtime/admin_api.token` to `${HOME}/.warp_parse/admin_api.token`, while keeping a work-root fallback when `HOME` is unavailable
-- **Source/File Config**: Drop `path` support from runtime file-source specs; use `base + file` only, keep wildcard support limited to `file`, and process matched files sequentially even when each file uses `instances > 1` parallel shard readers
-- **Source/File Unified Config**: Align unified source config tests and helper builders with the runtime-only `base + file` contract so file connectors no longer emit legacy `path` params
-- **Connectors/Sources**: Migrate the built-in `file`, `syslog`, and `tcp` source connector implementations into `wp-core-connectors`; `wp-motor` now keeps compatibility re-export modules and runtime registration glue only
-- **Dependencies/Connectors**: Switch `wp-motor` back to the published `wp-core-connectors 0.1.2` release after the source-connector migration, instead of relying on a local path override
-- **wp-proj/init Demo**: Change the generated `topology/sources/wpsrc.toml` file override from `gen.dat` to `gen*.dat` so the demo source matches both single-file wpgen output and parallel shard files like `gen-r0.dat`
-
-### Fixed
-- **Runtime/Reload**: Count parser/sink/infra drain targets from actual started workers and add bounded tail cleanup for detached old processing so reload does not wait indefinitely on stale tasks
-- **Project Init**: Harden `wp-proj` config/bootstrap file creation so missing parent directories now fail fast or are created before writing `conf/wparse.toml`, `conf/wpgen.toml`, semantic dict config, and admin API token files
-- **Project Bootstrap**: Create `work_root` and `conf/` before `WarpProject` loads or auto-initializes engine config, preventing intermittent `save toml` failures under temp-dir based test workspaces
-
-## [1.19.5] - 2026-03-15
-
-### Added
-- **Runtime Control**: Add a structured in-process runtime command bus for `LoadModel`, including `oneshot` replies, reload single-flight gating, and runtime status snapshots for host-layer management integration
-
-### Changed
-- **Reload Runtime**: Return structured reload outcomes (`done`, `done_with_force_replace`, `failed`) from `wp-motor` so `warp-parse` can map results to admin HTTP responses
-- **Daemon Lifecycle**: Reconnect daemon command handling with the existing exit-policy state machine to preserve quiescing/stopping behavior while runtime commands are enabled
-- **Control Readiness**: Reject runtime commands before the daemon loop is ready, and stop accepting new commands as soon as shutdown or quiescing begins
-- **Config/Knowledge**: Add `[models].knowledge` as the configurable root for knowdb and semantic dictionary files, while keeping the legacy `knowledge/semantic_dict.toml` fallback for semantic dict loading
-- **Documentation**: Clarify the remote reload boundary so admin HTTP lives in `warp-parse`, while `wp-motor` only owns runtime command execution and status reporting
-- **Dependencies/Knowledge**: Switch workspace consumers to external `wp-knowledge 0.10`, remove the local `crates/wp-knowledge` mirror, and align OML/routing cache usage with the external crate types
-- **Dependencies/Language**: Record `wp-lang` as an externalized dependency track instead of continuing to maintain a local in-workspace mirror
-
-### Fixed
-- **Batch Runtime**: Disconnect the parse router before batch shutdown waits on parser completion so file-source EOF can drain remaining data and exit instead of hanging in `Quiescing`
-
-## [1.19.0] - 2026-03-10
-
-### Added
-- **Sinks/Arrow**: Add `arrow-file` sink for local length-prefixed Arrow IPC frame output
-- **wp-proj/init**: Add `arrow_file_sink` and `arrow_tcp_sink` templates to project initialization
-- **OML/Match**: Add `iequals_any(...)` for case-insensitive multi-candidate matching in `match` expressions
-- **OML/Lookup**: Add `lookup_nocase(dict, key, default)` for case-insensitive lookup against static object dictionaries
-- **OML/Calc**: Add `calc(...)` arithmetic expressions with `+ - * / %` and `abs/round/floor/ceil`
-
-### Changed
-- **Connectors/Core**: Move builtin connector sink implementations into the standalone `wp-core-connectors` crate and keep engine-side code as thin re-export wrappers
-- **Connectors/Packaging**: Decouple `wp-core-connectors` from `wp-conf` so it can be consumed as an independent crate
-- **Connectors/Net**: Reuse shared `NetWriter` infrastructure for Arrow-over-TCP output
-- **Documentation/OML**: Update Chinese and English OML function and grammar references for `iequals_any` and `lookup_nocase`
-- **Documentation/OML**: Add Chinese and English OML docs for `calc(...)` arithmetic expressions
-
-### Fixed
-- **Sinks/Runtime**: Fix `wp-core-connectors` sink runtime semantics around disconnect handling, raw input validation, output path resolution, and duplicate factory registration
+- **Runtime/Reload Stability**: Prevent reload and batch shutdown from hanging by draining only started workers, cleaning up detached old processing tails, and disconnecting parse routing correctly during shutdown
+- **Realtime/TCP Memory**: Bound realtime picker backlog by bytes and reduce TCP source-side pending buffering to curb memory growth under high EPS input
+- **Admin API/Auth Loading**: Apply the standard `env_eval + conf_absolutize` pipeline to all engine-config loading paths so `${HOME}` in `admin_api.auth.token_file` resolves correctly
+- **Source/File Validation**: Align source statistics and total-input calculation with the runtime-only `base + file` contract, preserve `Some(0)` for empty files, and fail explicitly on wildcard no-match or unreadable files
+- **wpgen/Clean**: Make `wpgen data clean` remove sharded outputs such as `gen-r*.dat`
+- **wp-proj/Bootstrap**: Ensure bootstrap directories are created before writing config files and fix generated OML examples so initialization no longer leaves merge artifacts or intermittent save failures
+- **Sinks/Runtime**: Fix sink runtime behavior around disconnect handling, raw input validation, output path resolution, and duplicate factory registration
+- **OML/Static**: Reject `static { ... }` blocks that reference other static symbols during parsing
+- **OML/Diagnostics**: Make `oml-diag` collection task-aware under async execution
 - **OML/Calc**: Normalize invalid arithmetic cases in `calc(...)` to `ignore`, including integer overflow, non-finite floats, and large-integer rounding edge cases
+
 ## [1.18.3] - 2026-03-16
 
 ### Changed

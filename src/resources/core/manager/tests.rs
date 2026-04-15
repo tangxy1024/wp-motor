@@ -18,6 +18,7 @@ async fn test_res() -> RunResult<()> {
     // Ensure built-in sinks are registered for Factory path (file/null/test_rescue)
 
     use wp_conf::test_support::ForTest;
+    crate::connectors::startup::init_runtime_registries();
     crate::sinks::register_builtin_sinks();
 
     let (conf_manager, main_conf) =

@@ -1,9 +1,11 @@
 use crate::facade::test_helpers::SinkTerminal;
 use crate::sinks::ProcMeta;
+use crate::sinks::SinkRecUnit;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use crate::core::sinks::sync_sink::RecSyncSink;
 use crate::runtime::actor::constants::ACTOR_IDLE_TICK_MS;
 use crate::types::AnyResult;
 use tokio::time::{MissedTickBehavior, interval, sleep};
@@ -144,16 +146,18 @@ impl ActorMonitor {
                         wparse_stat.slice.show_table();
                         println!("sum stat:");
                         wparse_stat.total.show_table();
-                    }
-                    if run_ctrl.not_alone() {
-                        let mut tdc_vec = wparse_stat.slice.conv_to_tdc();
-                        while let Some(tdc) = tdc_vec.pop() {
-                            if let Some(sink) = &mut self.sink
-                                && let Err(e) = sink.send_record(0, ProcMeta::Null, tdc.into())
-                            {
-                                error_data!("sink error:{}", e);
-                            }
+                }
+                if run_ctrl.not_alone() {
+                    let tdc_vec = wparse_stat.slice.conv_to_tdc();
+                    if let Some(sink) = &self.sink {
+                        let units: Vec<SinkRecUnit> = tdc_vec
+                            .into_iter()
+                            .map(|tdc| SinkRecUnit::new(0, ProcMeta::Null, tdc.into()))
+                            .collect();
+                        if let Err(e) = sink.send_to_sink_batch(units) {
+                            error_data!("sink error:{}", e);
                         }
+                    }
                     }
                     wparse_stat.sum_up();
                 }

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.2] - 2026-04-16
+
+### Changed
+- **CI/GitHub Actions**: Enable the main CI workflow on `hotfix/*` branches so maintenance releases run the same workflow checks as the main release line
+
+### Fixed
+- **Config Schema/Tests**: Update generated sink defaults fixtures and test configs to match strict `deny_unknown_fields` schemas, removing invalid `version = "2.0"` headers from `defaults.toml`-style files
+- **Observability Validation**: Fix observability validation tests to load sink defaults from schema-valid fixtures under the strict config layout
+
 ## [1.20.0] - 2026-04-11
 
 ### Added

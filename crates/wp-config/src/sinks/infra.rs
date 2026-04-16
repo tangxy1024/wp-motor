@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 use crate::structure::{FixedGroup, FlexGroup, default_batch_size, default_batch_timeout_ms};
 use anyhow::Result as AnyResult;
-use orion_error::ToStructError;
+use orion_error::{ErrorWith, ToStructError, UvsReason};
 use orion_variate::{EnvDict, EnvEvaluable};
-use wp_error::config_error::ConfResult;
+use wp_error::config_error::{ConfCore, ConfReason, ConfResult};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone)]
 pub struct InfraSinkConf {
@@ -55,9 +55,10 @@ impl InfraSinkConf {
         if infra_d.exists() || business_d.exists() {
             // 使用配置层统一输出：将 SinkRouteConf 映射为不同的 Infra 组
             let confs = crate::sinks::load_infra_route_confs(path, dict).map_err(|e| {
-                wp_error::config_error::ConfError::from(wp_error::config_error::ConfReason::Syntax(
-                    e.to_string(),
-                ))
+                ConfReason::<ConfCore>::Uvs(UvsReason::core_conf())
+                    .to_err()
+                    .with_detail(e.to_string())
+                    .want("load infra routes")
             })?;
             let mut conf = InfraSinkConf::default();
             for c in confs {

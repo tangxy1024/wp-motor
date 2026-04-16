@@ -26,13 +26,9 @@ fn bg_red<S: AsRef<str>>(s: S) -> String {
     colorize(s.as_ref(), "41;97")
 }
 
-/// 从长串的嵌套错误中提取三元要素：原因、细节、上下文位置（若有）。
+/// 从长串嵌套错误中提取主原因、详情和配置文件路径。
 fn derive_error_triplet(raw: &str) -> (String, Option<String>, Option<String>) {
-    let reason = if let Some(idx) = raw.find("StructError") {
-        raw[..idx].trim_end().to_string()
-    } else {
-        raw.to_string()
-    };
+    let reason = raw.lines().next().map(str::trim).unwrap_or(raw).to_string();
     let mut details = raw
         .find("Details:")
         .and_then(|pos| raw[pos + "Details:".len()..].lines().next())
@@ -57,10 +53,28 @@ fn derive_error_triplet(raw: &str) -> (String, Option<String>, Option<String>) {
             }
         }
     }
-    let context = raw
-        .rfind("(group:")
-        .map(|start| raw[start..].trim().trim_end_matches(')').to_string());
-    (reason, details, context)
+    let file_path = raw.lines().map(str::trim).find_map(|line| {
+        if let Some(v) = line.strip_prefix("from path : ") {
+            return Some(v.to_string());
+        }
+        if let Some(v) = line.strip_prefix("from path: ") {
+            return Some(v.to_string());
+        }
+        if let Some(v) = line.strip_prefix("1. from path: ") {
+            return Some(v.to_string());
+        }
+        if let Some(v) = line.strip_prefix("1. from path : ") {
+            return Some(v.to_string());
+        }
+        None
+    });
+    (reason, details, file_path)
+}
+
+fn extract_toml_parse_excerpt(raw: &str) -> Option<String> {
+    let anchor = raw.find("TOML parse error at line ")?;
+    let excerpt = raw[anchor..].trim();
+    Some(excerpt.to_string())
 }
 
 /// 提示收集：根据错误文本提取常见修复建议（启发式）。
@@ -118,7 +132,8 @@ pub fn exit_code_for(reason: &RunReason) -> i32 {
 pub fn print_run_error(app: &str, e: &RunError) {
     let title = format!("{} error", app);
     let raw = e.to_string();
-    let (reason_str, details_opt, ctx_opt) = derive_error_triplet(&raw);
+    let (reason_str, details_opt, file_opt) = derive_error_triplet(&raw);
+    let parse_excerpt = extract_toml_parse_excerpt(&raw);
     let hints = collect_hints(&raw);
 
     eprintln!("{} {}", bg_red(" ERROR "), bold(&title));
@@ -138,9 +153,11 @@ pub fn print_run_error(app: &str, e: &RunError) {
     if let Some(d) = details_opt {
         eprintln!("{} {}", bold("detail:"), d);
     }
-    if let Some(c) = ctx_opt {
-        let ctx = c.trim_start_matches('(').replace(": ", "=");
-        eprintln!("{} {}", bold("location:"), yellow(ctx));
+    if let Some(file) = file_opt {
+        eprintln!("{} {}", bold("file:"), yellow(file));
+    }
+    if let Some(excerpt) = parse_excerpt {
+        eprintln!("{} {}", bold("parse:"), yellow(excerpt));
     }
     if !hints.is_empty() {
         eprintln!("{}", bold("hints:"));
@@ -157,7 +174,8 @@ pub fn print_run_error(app: &str, e: &RunError) {
 pub fn print_error(app: &str, err: &impl std::fmt::Display) {
     let title = format!("{} error", app);
     let raw = err.to_string();
-    let (reason_str, details_opt, ctx_opt) = derive_error_triplet(&raw);
+    let (reason_str, details_opt, file_opt) = derive_error_triplet(&raw);
+    let parse_excerpt = extract_toml_parse_excerpt(&raw);
     let hints = collect_hints(&raw);
 
     eprintln!("{} {}", bg_red(" ERROR "), bold(&title));
@@ -177,9 +195,11 @@ pub fn print_error(app: &str, err: &impl std::fmt::Display) {
     if let Some(d) = details_opt {
         eprintln!("{} {}", bold("detail:"), d);
     }
-    if let Some(c) = ctx_opt {
-        let ctx = c.trim_start_matches('(').replace(": ", "=");
-        eprintln!("{} {}", bold("location:"), yellow(ctx));
+    if let Some(file) = file_opt {
+        eprintln!("{} {}", bold("file:"), yellow(file));
+    }
+    if let Some(excerpt) = parse_excerpt {
+        eprintln!("{} {}", bold("parse:"), yellow(excerpt));
     }
     if !hints.is_empty() {
         eprintln!("{}", bold("hints:"));
@@ -197,6 +217,36 @@ mod tests {
         let hs = collect_hints("File source missing 'path'");
         assert!(hs.iter().any(|h| h.contains("生成输入数据")));
     }
+
+    #[test]
+    fn test_extract_file_and_toml_parse_excerpt() {
+        let raw = r#"[50041] configuration error << core config
+  -> Source: [500] load sink defaults
+  -> Context stack:
+context 0:
+target: load object from toml file with env
+1. from path: /tmp/wp-use/topology/sinks/defaults.toml
+
+context 1:
+target: load sink defaults
+
+Caused by:
+  0: [500] load sink defaults
+  1: [500] TOML parse error at line 1, column 1
+       |
+     1 | version = "2.0"
+       | ^^^^^^^
+     unknown field `version`, expected `defaults`"#;
+        let (_reason, _detail, file) = derive_error_triplet(raw);
+        let excerpt = extract_toml_parse_excerpt(raw).expect("toml parse excerpt");
+        assert_eq!(
+            file.as_deref(),
+            Some("/tmp/wp-use/topology/sinks/defaults.toml")
+        );
+        assert!(excerpt.contains("line 1, column 1"));
+        assert!(excerpt.contains("unknown field `version`, expected `defaults`"));
+    }
+
     #[test]
     fn test_exit_code_mapping() {
         use orion_error::UvsReason;

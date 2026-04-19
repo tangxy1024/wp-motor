@@ -1,7 +1,7 @@
 use crate::sinks::{prelude::*, utils::formatter::gen_fmt_dat};
+use wp_connector_api::SinkResult;
 use wp_model_core::model::fmt_def::TextFmt;
 use wp_model_core::raw::RawData;
-use wp_connector_api::SinkResult;
 
 use super::utils::formatter::fds_fmt_proc;
 

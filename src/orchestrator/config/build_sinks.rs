@@ -41,7 +41,10 @@ pub fn fmt_file(out_file: &FileSinkConf, fmt: TextFmt) -> SinkResult<FormatAdapt
 }
 
 #[allow(dead_code)]
-pub(crate) fn fmt_file_by_path(out_file: &str, fmt: TextFmt) -> SinkResult<FormatAdapter<FileSink>> {
+pub(crate) fn fmt_file_by_path(
+    out_file: &str,
+    fmt: TextFmt,
+) -> SinkResult<FormatAdapter<FileSink>> {
     let mut pipe: FormatAdapter<FileSink> = FormatAdapter::new(fmt);
     pipe.next_pipe(FileSink::new(out_file)?);
     Ok(pipe)

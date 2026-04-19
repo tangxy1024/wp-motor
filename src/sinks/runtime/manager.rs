@@ -159,8 +159,9 @@ impl SinkRuntime {
         );
         let out_path = Path::new(&file_path);
         if let Some(parent) = out_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| SinkReason::sink("create rescue sink directory failed").err_source(e))?;
+            fs::create_dir_all(parent).map_err(|e| {
+                SinkReason::sink("create rescue sink directory failed").err_source(e)
+            })?;
         }
         info_ctrl!("crate out file use async mode {}", file_path);
         let back = RescueFileSink::new(&file_path).await?;

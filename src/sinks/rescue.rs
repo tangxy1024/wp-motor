@@ -98,8 +98,8 @@ impl RescueFileSink {
     }
 
     async fn write_entry(&mut self, entry: &RescueEntry) -> SinkResult<()> {
-        let mut line =
-            serde_json::to_vec(entry).map_err(|e| Self::sink_err("serialize rescue entry failed", e))?;
+        let mut line = serde_json::to_vec(entry)
+            .map_err(|e| Self::sink_err("serialize rescue entry failed", e))?;
         line.push(b'\n');
         self.writer
             .write_all(&line)

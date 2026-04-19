@@ -1,9 +1,9 @@
 use orion_error::{ToStructError, UvsFrom};
-use wp_error::run_error::{RunReason, RunResult};
 use std::env;
 use std::fs::File;
 use std::path::Path;
 use std::process::Command;
+use wp_error::run_error::{RunReason, RunResult};
 
 pub trait Wc<T1, T2> {
     fn wc_of(&self, file: T1) -> RunResult<T2>;
@@ -84,12 +84,16 @@ impl Usecase {
                 .to_err()
                 .with_detail(format!("file not found: {}", path)));
         }
-        let cmd = Command::new("wc").arg("-l").arg(path).output().map_err(|e| {
-            RunReason::from_sys()
-                .to_err()
-                .with_detail(format!("run wc failed for {}", path))
-                .with_source(e)
-        })?;
+        let cmd = Command::new("wc")
+            .arg("-l")
+            .arg(path)
+            .output()
+            .map_err(|e| {
+                RunReason::from_sys()
+                    .to_err()
+                    .with_detail(format!("run wc failed for {}", path))
+                    .with_source(e)
+            })?;
         let binding = String::from_utf8(cmd.stdout).map_err(|e| {
             RunReason::from_sys()
                 .to_err()

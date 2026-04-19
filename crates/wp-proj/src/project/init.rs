@@ -312,12 +312,10 @@ impl WarpProject {
         let abs_root = normalize_work_root(work_root);
         let engine_config_path = abs_root.join(CONF_WPARSE_FILE);
         if !engine_config_path.exists() {
-            return Err(RunReason::from_conf()
-                .to_err()
-                .with_detail(format!(
-                    "engine config not found: {}",
-                    engine_config_path.display()
-                )));
+            return Err(RunReason::from_conf().to_err().with_detail(format!(
+                "engine config not found: {}",
+                engine_config_path.display()
+            )));
         }
         let conf = EngineConfig::env_load_toml(&engine_config_path, dict)
             .owe_conf()?
@@ -330,12 +328,10 @@ impl WarpProject {
         let abs_root = normalize_work_root(work_root);
         let wpgen_config_path = abs_root.join(CONF_WPGEN_FILE);
         if !wpgen_config_path.exists() {
-            return Err(RunReason::from_conf()
-                .to_err()
-                .with_detail(format!(
-                    "wpgen config not found: {}",
-                    wpgen_config_path.display()
-                )));
+            return Err(RunReason::from_conf().to_err().with_detail(format!(
+                "wpgen config not found: {}",
+                wpgen_config_path.display()
+            )));
         }
         WpGenConfig::env_load_toml(&wpgen_config_path, dict).owe_conf()?;
         Ok(())

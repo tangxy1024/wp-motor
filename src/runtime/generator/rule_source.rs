@@ -1,8 +1,8 @@
 use crate::facade::generator::GenRuleUnit;
 use orion_error::{ToStructError, UvsFrom};
+use wp_error::run_error::{RunReason, RunResult};
 use wpl::generator::FmtFieldVec;
 use wpl::{WplCompiledRule, WplStatementType, wpl_compile_rule};
-use wp_error::run_error::{RunReason, RunResult};
 
 /// Precompiled rule generator: compile once via wpl::wpl_compile_rule; support fast batch generation.
 pub struct RuleGenSource {

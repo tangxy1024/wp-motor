@@ -58,7 +58,9 @@ impl GenRuleUnit {
     pub fn generat(&mut self) -> ConfResult<Vec<FmtFieldVec>> {
         let mut result = Vec::new();
         if self.get_rules().is_empty() {
-            return Err(ConfError::from(ConfReason::NotFound("rule unit is empty".into())));
+            return Err(ConfError::from(ConfReason::NotFound(
+                "rule unit is empty".into(),
+            )));
         }
         let ups_sep = WplSep::default();
         for wpl_rule in self.get_rules() {
@@ -87,10 +89,7 @@ impl GenRuleUnit {
                     let field = parser.generate(&mut ch, &sep, f_conf, rule).map_err(|e| {
                         ConfError::from(ConfReason::Syntax(format!(
                             "generate field '{}' failed: {}",
-                            f_conf
-                                .name
-                                .as_deref()
-                                .unwrap_or(f_conf.meta_name.as_str()),
+                            f_conf.name.as_deref().unwrap_or(f_conf.meta_name.as_str()),
                             e
                         )))
                     })?;

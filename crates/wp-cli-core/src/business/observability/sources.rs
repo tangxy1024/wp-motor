@@ -211,10 +211,14 @@ pub fn total_input_from_wpsrc(
         }
         saw_enabled_file_source = true;
         let key = source.source.key;
-        let path = validated_file_source_path(&source.instance.core.params)
-            .map_err(|e| e.with(&wpsrc_path).want(format!("validate source '{}' path spec", key)))?;
-        let paths = expand_source_paths(&path, &ctx.work_root)
-            .map_err(|e| e.with(&wpsrc_path).want(format!("expand source '{}' files", key)))?;
+        let path = validated_file_source_path(&source.instance.core.params).map_err(|e| {
+            e.with(&wpsrc_path)
+                .want(format!("validate source '{}' path spec", key))
+        })?;
+        let paths = expand_source_paths(&path, &ctx.work_root).map_err(|e| {
+            e.with(&wpsrc_path)
+                .want(format!("expand source '{}' files", key))
+        })?;
         for pathbuf in paths {
             let n = count_lines_file(&pathbuf).map_err(|e| {
                 ConfIOReason::from_validation()

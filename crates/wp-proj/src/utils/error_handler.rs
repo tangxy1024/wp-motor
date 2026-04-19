@@ -100,9 +100,7 @@ pub struct ErrorHandler;
 impl ErrorHandler {
     /// 创建配置相关错误
     pub fn config_error(message: impl Into<String>) -> RunResult<()> {
-        Err(RunReason::from_conf()
-            .to_err()
-            .with_detail(message.into()))
+        Err(RunReason::from_conf().to_err().with_detail(message.into()))
     }
 
     /// 创建文件操作相关错误

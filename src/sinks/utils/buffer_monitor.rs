@@ -100,7 +100,9 @@ where
             }
             let formatted = extract_formatted(data.data());
             if let Err(e) = buffer.write_all(formatted.as_bytes()) {
-                return TrySendStatus::Err(Arc::new(SinkReason::sink("buffer write failed").err_source(e)));
+                return TrySendStatus::Err(Arc::new(
+                    SinkReason::sink("buffer write failed").err_source(e),
+                ));
             }
             if let Err(e) = buffer.write_all(b"\n") {
                 return TrySendStatus::Err(Arc::new(

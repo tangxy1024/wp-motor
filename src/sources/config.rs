@@ -80,7 +80,10 @@ impl SourceConfigParser {
             let fac = registry::get_source_factory(&resolved.kind).ok_or_else(|| {
                 ConfIOReason::from_validation()
                     .to_err()
-                    .with_detail(format!("source factory not found for kind '{}'", resolved.kind))
+                    .with_detail(format!(
+                        "source factory not found for kind '{}'",
+                        resolved.kind
+                    ))
             })?;
             let svc = fac
                 .build(&resolved, &ctx)

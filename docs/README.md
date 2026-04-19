@@ -104,11 +104,24 @@ docs/
   - DataField 类型系统
   - 最佳实践和调试技巧
 
+### 开发规范
+
+- **[错误处理 Review 清单](dev/error_review_checklist.md)** ⭐ 重要
+  - 面向 code review 的快速检查表
+  - 覆盖 `anyhow::Result` 边界、source 保留、detail 质量、定位信息与 CLI 可诊断性
+  - 可直接配合“错误体系设计”文档使用
+
 **适用人群**: WP-Motor 核心开发者、OML/WPL 扩展开发者
 
 ## 🏗 设计文档 (design/)
 
 面向架构演进、运行时机制调整和跨模块改造的设计文档。
+
+- **[错误体系设计](design/error_system_design.md)** ⭐ 重要
+  - 定义 `wp-motor` / `wp-proj` / `wp-cli-core` / `wp-config` 的统一错误分层
+  - 说明 `orion-error 0.6` 在本工程中的定位与推荐用法
+  - 约束 `reason/detail/source/context` 的职责分工
+  - 明确 `anyhow::Result` 的允许边界、反模式、评审检查清单与编码规范
 
 - **[WPL / OML / KnowDB 低中断更新设计](design/runtime_hot_reload_design.md)** ⭐ 重要
   - 以“十秒内无感”为目标的运行时更新方案
@@ -146,11 +159,17 @@ docs/
 ### 我想开发一个新的 OML pipe function
 → [OML PipeFun 开发指南](guide/oml_pipefun_development_guide.md)
 
+### 我想做错误处理 code review
+→ [错误处理 Review 清单](dev/error_review_checklist.md)
+
 ### 我想 review 低中断更新方案
 → [WPL / OML / KnowDB 低中断更新设计](design/runtime_hot_reload_design.md)
 
 ### 我想 review 远程 reload 管理面方案
 → [Warp-Parse 远程 Reload 管理面设计](design/runtime_reload_admin_http_design.md)
+
+### 我想统一 review 错误设计与 `orion-error` 用法
+→ [错误体系设计](design/error_system_design.md)
 
 ## 📝 文档规范
 
@@ -195,6 +214,8 @@ docs/
 
 ## 📅 最近更新
 
+- **2026-04-19**: 添加错误体系设计文档，统一 `orion-error` / `RunError` / `ConfError` / runtime 边界约束
+- **2026-04-19**: 添加错误处理 Review 清单，供 code review 与增量整改使用
 - **2026-03-11**: 更新 `WPL / OML / KnowDB` 运行时更新设计，明确当前实现为 `P1`
 - **2026-03-11**: 添加 `WParse` 远程 reload 管理面设计文档
 - **2026-03-10**: 添加 `WPL / OML / KnowDB` 运行时热更新设计文档

@@ -78,18 +78,11 @@ impl WpRescueApp {
                     info_ctrl!("init knowdb success({}) ", knowdb_path.display(),);
                 }
                 Err(err) => {
-                    warn_ctrl!(
-                        "init knowdb skipped in rescue ({}): {}",
-                        knowdb_path.display(),
-                        err
-                    );
+                    crate::knowledge::log_knowdb_init_error("rescue mode: ", &knowdb_path, &err);
                 }
             }
         } else {
-            warn_ctrl!(
-                "rescue mode: knowdb config not found at {}; skip knowdb init",
-                knowdb_path.display()
-            );
+            crate::knowledge::log_missing_knowdb_config("rescue mode: ", &knowdb_path);
         }
 
         // PID

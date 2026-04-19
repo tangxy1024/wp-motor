@@ -95,6 +95,17 @@ mod tests {
                 .join(format!("connectors/sink.d/{}", first_sink.file_name))
                 .exists()
         );
+        let raw_sink = templates
+            .iter()
+            .find(|t| t.connectors.iter().any(|def| def.id == "file_raw_sink"))
+            .expect("file raw sink template");
+        let raw_path = temp
+            .path()
+            .join(format!("connectors/sink.d/{}", raw_sink.file_name));
+        assert!(raw_path.exists());
+        let raw_body = fs::read_to_string(raw_path).expect("read file raw sink template");
+        assert!(raw_body.contains("id = \"file_raw_sink\""));
+        assert!(raw_body.contains("fmt = \"raw\""));
     }
 
     #[test]

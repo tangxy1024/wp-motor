@@ -13,3 +13,8 @@ file = "monitor.dat"
 
 [sink_group.sinks.expect]
 max = 1.0
+
+# To export monitor metrics to VictoriaMetrics, uncomment and tune the sink below.
+#[[sink_group.sinks]]
+#name = "victoriametrics"
+#connect = "victoriametrics_sink"

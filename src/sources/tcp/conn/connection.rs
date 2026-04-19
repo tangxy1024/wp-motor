@@ -1,6 +1,7 @@
 use crate::sources::event_id::next_event_id;
 use crate::sources::tcp::framing::{FramingExtractor, FramingMode};
 use bytes::{Bytes, BytesMut};
+use orion_error::ToStructError;
 use std::collections::VecDeque;
 use std::io::ErrorKind;
 use std::net::{IpAddr, SocketAddr};
@@ -142,10 +143,11 @@ impl TcpConnection {
                 }
                 Err(e) => {
                     return Err(SourceReason::Disconnect(format!(
-                        "tcp read error ({}): {}",
-                        self.client_addr, e
+                        "tcp read error ({})",
+                        self.client_addr
                     ))
-                    .into());
+                    .to_err()
+                    .with_source(e));
                 }
             }
         }
@@ -162,10 +164,11 @@ impl TcpConnection {
         loop {
             if let Err(e) = self.stream.readable().await {
                 return Err(SourceReason::Disconnect(format!(
-                    "tcp readable error ({}): {}",
-                    self.client_addr, e
+                    "tcp readable error ({})",
+                    self.client_addr
                 ))
-                .into());
+                .to_err()
+                .with_source(e));
             }
             match self.stream.try_read_buf(self.batcher.buffer_mut()) {
                 Ok(0) => {
@@ -202,10 +205,11 @@ impl TcpConnection {
                 }
                 Err(e) => {
                     return Err(SourceReason::Disconnect(format!(
-                        "tcp read error ({}): {}",
-                        self.client_addr, e
+                        "tcp read error ({})",
+                        self.client_addr
                     ))
-                    .into());
+                    .to_err()
+                    .with_source(e));
                 }
             }
         }

@@ -2,7 +2,6 @@ use crate::{
     core::parser::wpl_engine, facade::diagnostics::print_run_error,
     orchestrator::config::loader::WarpConf,
 };
-use anyhow::Result;
 use orion_error::{ErrorConv, ToStructError, UvsFrom};
 use orion_variate::{EnvDict, EnvEvaluable};
 use std::{env, path::PathBuf};
@@ -20,12 +19,24 @@ pub fn load_warp_engine_confs(
 ) -> RunResult<(WarpConf, EngineConfig)> {
     let conf_manager = WarpConf::new(work_root);
     let abs_root = conf_manager.work_root().to_path_buf();
-    if let Err(err) = env::set_current_dir(&abs_root) {
-        error_ctrl!("设置工作目录失败:, error={}", &err);
-        panic!("设置工作目录失败");
-    };
+    env::set_current_dir(&abs_root).map_err(|err| {
+        error_ctrl!(
+            "设置工作目录失败: path={}, error={}",
+            abs_root.display(),
+            &err
+        );
+        RunReason::from_conf()
+            .to_err()
+            .with_detail(format!("set work root '{}' failed", abs_root.display()))
+            .with_source(err)
+    })?;
     let main_conf = EngineConfig::load(&abs_root, dict)
-        .err_conv()?
+        .map_err(|err| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail("load engine config failed")
+                .with_source(err)
+        })?
         .env_eval(dict)
         .conf_absolutize(&abs_root);
     Ok((conf_manager, main_conf))

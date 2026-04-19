@@ -23,7 +23,6 @@ use crate::runtime::actor::{ExitPolicyKind, TaskGroup, TaskManager, TaskRole};
 use crate::sinks::SinkRuntime;
 use crate::sinks::{SinkBackendType, SinkDatASender, SinkDataEnum, make_blackhole_sink};
 use crate::stat::MonSend;
-use crate::types::AnyResult;
 use orion_error::{ErrorOwe, ToStructError, UvsBizFrom};
 use std::any::type_name_of_val;
 use wp_conf::structure::SinkInstanceConf;
@@ -236,7 +235,7 @@ pub trait SpawnGen {
         dat_s: SinkDatASender,
         mon_s: MonSend,
         gen_conf: GenGRA,
-    ) -> AnyResult<JoinHandle<()>>;
+    ) -> RunResult<JoinHandle<()>>;
 }
 
 pub struct RuleGenRoutine {
@@ -254,7 +253,7 @@ impl SpawnGen for RuleGenRoutine {
         dat_s: SinkDatASender,
         mon_s: MonSend,
         gen_conf: GenGRA,
-    ) -> AnyResult<JoinHandle<()>> {
+    ) -> RunResult<JoinHandle<()>> {
         info_ctrl!("gen conf(worker) : {:?}", gen_conf);
         let rules_copy = self.rules.clone();
         let dat_s_cp = dat_s;
@@ -290,9 +289,10 @@ impl SpawnGen for SampleGenRoutine {
         dat_s: SinkDatASender,
         mon_s: MonSend,
         gen_conf: GenGRA,
-    ) -> AnyResult<JoinHandle<()>> {
+    ) -> RunResult<JoinHandle<()>> {
         info_ctrl!("gen samples from : {:?}", self.samples);
-        let mut gen_actor = SampleGenerator::from_file(self.samples.clone())?;
+        let mut gen_actor = SampleGenerator::from_file(self.samples.clone())
+            .map_err(|e| RunReason::from_conf().to_err().with_source(e))?;
         let dat_s_cp = dat_s;
         let h = tokio::spawn(async move {
             match gen_actor.gen_data(cmd_r, dat_s_cp, gen_conf, mon_s).await {

@@ -10,7 +10,7 @@ use crate::stat::metric_collect::MetricCollectors;
 use derive_getters::Getters;
 use orion_overload::append::Appendable;
 use wp_conf::structure::SinkGroupConf;
-use wp_connector_api::{SinkError, SinkReason, SinkResult};
+use wp_connector_api::{SinkReason, SinkResult};
 use wp_knowledge::cache::FieldQueryCache;
 use wp_stat::StatReq;
 
@@ -111,7 +111,7 @@ impl SinkDispatcher {
         self.ingress_stat
             .send_stat(mon_send)
             .await
-            .map_err(|e| SinkError::from(SinkReason::Sink(e.to_string())))
+            .map_err(|e| SinkReason::sink("send ingress stat failed").err_source(e))
     }
 
     pub fn get_dat_r_mut(&mut self) -> &mut SinkDatYReceiver {

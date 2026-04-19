@@ -1,6 +1,7 @@
 //! TCP acceptor implementation bridging engine `ServiceAcceptor` to the listener loop.
 
 use async_trait::async_trait;
+use orion_error::ToStructError;
 use tokio::sync::{broadcast, mpsc};
 
 use wp_connector_api::{CtrlRx, ServiceAcceptor, SourceError, SourceReason, SourceResult};
@@ -63,9 +64,11 @@ impl ServiceAcceptor for TcpAcceptor {
         );
 
         worker.run().await.map_err(|e| match e.reason() {
-            SourceReason::Disconnect(msg) | SourceReason::SupplierError(msg) => SourceError::from(
-                SourceReason::Disconnect(format!("tcp acceptor '{}' failed: {}", self.key, msg)),
-            ),
+            SourceReason::Disconnect(msg) | SourceReason::SupplierError(msg) => {
+                SourceReason::Disconnect(format!("tcp acceptor '{}' failed", self.key))
+                    .to_err()
+                    .with_detail(msg.clone())
+            }
             _ => e,
         })
     }

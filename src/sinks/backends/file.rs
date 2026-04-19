@@ -3,8 +3,7 @@ use crate::core::sinks::sync_sink::{RecSyncSink, TrySendStatus};
 use crate::sinks::utils::buffer_monitor::BufferMonitor;
 use crate::sinks::utils::formatter::FormatAdapter;
 use crate::sinks::{SinkEndpoint, SinkRecUnit};
-use crate::types::{AnyResult, Build1, SafeH};
-use anyhow::Context;
+use crate::types::{Build1, SafeH};
 use orion_error::ErrorOweBase;
 use std::fs;
 use std::fs::File;
@@ -32,9 +31,10 @@ pub struct FileSink {
 }
 
 impl FileSink {
-    pub fn new(out_path: &str) -> AnyResult<Self> {
-        let out_io =
-            File::create(out_path).with_context(|| format!("output file fail :{}", out_path))?;
+    pub fn new(out_path: &str) -> SinkResult<Self> {
+        let out_io = File::create(out_path).map_err(|e| {
+            SinkReason::sink(format!("create output file '{}'", out_path)).err_source(e)
+        })?;
         Ok(Self {
             path: out_path.to_string(),
             out_io: SafeH::build(out_io),

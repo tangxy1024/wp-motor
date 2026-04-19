@@ -77,8 +77,11 @@ impl SourceConfigParser {
             let connector_id = item.connector_id.clone().unwrap_or_default();
             let mut resolved = core_to_resolved_with(&core, connector_id);
             Self::ensure_source_type_tag(&mut resolved);
-            let fac = registry::get_source_factory(&resolved.kind)
-                .ok_or_else(|| ConfIOReason::from_validation().to_err())?;
+            let fac = registry::get_source_factory(&resolved.kind).ok_or_else(|| {
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!("source factory not found for kind '{}'", resolved.kind))
+            })?;
             let svc = fac
                 .build(&resolved, &ctx)
                 .await

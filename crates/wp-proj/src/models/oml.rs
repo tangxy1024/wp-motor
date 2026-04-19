@@ -78,7 +78,11 @@ impl Oml {
         }
         let root_str = oml_root
             .to_str()
-            .ok_or_else(|| RunReason::from_conf().to_err())?;
+            .ok_or_else(|| {
+                RunReason::from_conf()
+                    .to_err()
+                    .with_detail("oml root path is not valid UTF-8")
+            })?;
         let oml_files = find_conf_files(root_str, WPARSE_OML_FILE)
             .owe_conf()
             .with(root_str)

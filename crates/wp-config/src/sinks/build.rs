@@ -4,7 +4,7 @@ use crate::sinks::io::business_dir;
 use crate::sinks::{load_connectors_for, load_route_files_from, load_sink_defaults};
 use crate::structure::{SinkInstanceConf, SinkRouteConf, Validate as ConfValidate};
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsFrom};
+use orion_error::{ErrorWith, ToStructError, UvsFrom, WrapStructError};
 use orion_variate::EnvDict;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -341,11 +341,10 @@ fn validate_sink_instance(
     conn: &ConnectorRec,
 ) -> OrionConfResult<()> {
     if let Err(e) = sink.validate() {
-        return Err(ConfIOReason::from_validation()
-            .to_err()
-            .with_detail(format!(
-                "sink validate error: {:?} (group: {}, sink: {}, connector: {}, file: {})",
-                e,
+        return Err(e
+            .wrap(ConfIOReason::from_validation())
+            .with(format!(
+                "group={}, sink={}, connector={}, file={}",
                 rf.sink_group.name,
                 sink.name(),
                 conn.id,
@@ -353,7 +352,8 @@ fn validate_sink_instance(
                     .as_ref()
                     .map(|p| p.display().to_string())
                     .unwrap_or_else(|| "-".to_string())
-            )));
+            ))
+            .with_detail("sink validate error"));
     }
     Ok(())
 }
@@ -373,11 +373,10 @@ fn plugin_validate_with(
             conn.id.clone(),
         );
         if let Err(e) = f.validate_spec(&resolved) {
-            return Err(ConfIOReason::from_validation()
-                .to_err()
-                .with_detail(format!(
-                    "plugin validate failed: {} (group: {}, sink: {}, connector: {}, file: {})",
-                    e,
+            return Err(e
+                .wrap(ConfIOReason::from_validation())
+                .with(format!(
+                    "group={}, sink={}, connector={}, file={}",
                     rf.sink_group.name,
                     sink.name(),
                     conn.id,
@@ -385,7 +384,8 @@ fn plugin_validate_with(
                         .as_ref()
                         .map(|p| p.display().to_string())
                         .unwrap_or_else(|| "-".to_string())
-                )));
+                ))
+                .with_detail("plugin validate failed"));
         }
     }
     Ok(())

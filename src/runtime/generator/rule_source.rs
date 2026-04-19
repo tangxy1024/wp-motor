@@ -1,8 +1,8 @@
 use crate::facade::generator::GenRuleUnit;
-use crate::types::AnyResult;
-use anyhow::anyhow;
+use orion_error::{ToStructError, UvsFrom};
 use wpl::generator::FmtFieldVec;
 use wpl::{WplCompiledRule, WplStatementType, wpl_compile_rule};
+use wp_error::run_error::{RunReason, RunResult};
 
 /// Precompiled rule generator: compile once via wpl::wpl_compile_rule; support fast batch generation.
 pub struct RuleGenSource {
@@ -10,7 +10,7 @@ pub struct RuleGenSource {
 }
 
 impl RuleGenSource {
-    pub fn from_units(units: Vec<GenRuleUnit>) -> AnyResult<Self> {
+    pub fn from_units(units: Vec<GenRuleUnit>) -> RunResult<Self> {
         let mut compiled: Vec<WplCompiledRule> = Vec::new();
         for u in units.into_iter() {
             if u.is_empty() {
@@ -20,15 +20,20 @@ impl RuleGenSource {
             for wpl_rule in u.get_rules().iter() {
                 match &wpl_rule.statement {
                     WplStatementType::Express(_) => {
-                        let cr = wpl_compile_rule(wpl_rule, &fields_map)
-                            .map_err(|e| anyhow!("compile_rule error: {}", e))?;
+                        let cr = wpl_compile_rule(wpl_rule, &fields_map).map_err(|e| {
+                            RunReason::from_conf()
+                                .to_err()
+                                .with_detail(format!("compile rule failed: {}", e))
+                        })?;
                         compiled.push(cr);
                     }
                 }
             }
         }
         if compiled.is_empty() {
-            return Err(anyhow!("no compiled rules (empty WPL or fields)"));
+            return Err(RunReason::from_conf()
+                .to_err()
+                .with_detail("no compiled rules (empty WPL or fields)"));
         }
         Ok(Self { rules: compiled })
     }
@@ -39,17 +44,25 @@ impl RuleGenSource {
     }
 
     /// Generate one record from rule index (wrap-around by length)
-    pub fn gen_one(&self, idx: usize) -> AnyResult<FmtFieldVec> {
+    pub fn gen_one(&self, idx: usize) -> RunResult<FmtFieldVec> {
         let ridx = idx % self.rules.len();
         let comp = &self.rules[ridx];
-        comp.gen_one()
+        comp.gen_one().map_err(|e| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("generate rule record failed: {}", e))
+        })
     }
 
     /// Generate `count` records starting at `idx_begin` (wrap-around).
-    pub fn gen_batch(&self, idx_begin: usize, count: usize) -> AnyResult<Vec<FmtFieldVec>> {
+    pub fn gen_batch(&self, idx_begin: usize, count: usize) -> RunResult<Vec<FmtFieldVec>> {
         let ridx = idx_begin % self.rules.len();
         let comp = &self.rules[ridx];
-        comp.gen_batch(idx_begin, count)
+        comp.gen_batch(idx_begin, count).map_err(|e| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("generate rule batch failed: {}", e))
+        })
     }
 }
 

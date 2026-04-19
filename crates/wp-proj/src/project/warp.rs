@@ -8,9 +8,16 @@ use super::{Connectors, Oml, ProjectPaths, Sinks, Sources, Wpl, init::PrjScope};
 use crate::{
     models::knowledge::Knowledge, sinks::clean_outputs, wparse::WParseManager, wpgen::WpGenManager,
 };
+use orion_error::{ToStructError, UvsFrom, WrapStructError};
 use orion_variate::{EnvDict, EnvEvaluable};
 use wp_conf::engine::EngineConfig;
-use wp_error::run_error::RunResult;
+use wp_error::run_error::{RunError, RunReason, RunResult};
+
+#[derive(Debug)]
+struct DataCleanFailure {
+    component: &'static str,
+    error: RunError,
+}
 
 /// # WarpProject
 ///
@@ -47,22 +54,32 @@ pub struct WarpProject {
 }
 
 impl WarpProject {
-    fn build(work_root: &Path, dict: &orion_variate::EnvDict) -> Self {
-        let abs_root = normalize_work_root(work_root);
+    fn build(work_root: &Path, dict: &orion_variate::EnvDict) -> RunResult<Self> {
+        let abs_root = normalize_work_root_result(work_root)?;
         let paths = ProjectPaths::from_root(&abs_root);
-        std::fs::create_dir_all(&abs_root).unwrap_or_else(|err| {
-            panic!("create work root failed {}: {}", abs_root.display(), err)
-        });
-        std::fs::create_dir_all(&paths.conf_dir).unwrap_or_else(|err| {
-            panic!(
-                "create conf dir failed {}: {}",
-                paths.conf_dir.display(),
-                err
-            )
-        });
+        std::fs::create_dir_all(&abs_root).map_err(|err| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("create work root '{}' failed", abs_root.display()))
+                .with_source(err)
+        })?;
+        std::fs::create_dir_all(&paths.conf_dir).map_err(|err| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(format!(
+                    "create conf dir '{}' failed",
+                    paths.conf_dir.display()
+                ))
+                .with_source(err)
+        })?;
         let eng_conf = Arc::new(
             EngineConfig::load_or_init(&abs_root, dict)
-                .expect("load engine config")
+                .map_err(|err| {
+                    RunReason::from_conf()
+                        .to_err()
+                        .with_detail("load engine config failed")
+                        .with_source(err)
+                })?
                 .env_eval(dict)
                 .conf_absolutize(&abs_root),
         );
@@ -75,7 +92,7 @@ impl WarpProject {
         let wparse_manager = WParseManager::new(&abs_root);
         let wpgen_manager = WpGenManager::new(&abs_root);
 
-        Self {
+        Ok(Self {
             paths,
             eng_conf,
             dict: dict.clone(),
@@ -87,7 +104,7 @@ impl WarpProject {
             knowledge,
             wparse_manager,
             wpgen_manager,
-        }
+        })
     }
 
     /// 静态初始化：创建并初始化完整项目
@@ -96,7 +113,7 @@ impl WarpProject {
         mode: PrjScope,
         dict: &orion_variate::EnvDict,
     ) -> RunResult<Self> {
-        let mut project = Self::build(work_root.as_ref(), dict);
+        let mut project = Self::build(work_root.as_ref(), dict)?;
         project.init_components(mode)?;
         Ok(project)
     }
@@ -107,7 +124,7 @@ impl WarpProject {
         mode: PrjScope,
         dict: &orion_variate::EnvDict,
     ) -> RunResult<Self> {
-        let mut project = Self::build(work_root.as_ref(), dict);
+        let mut project = Self::build(work_root.as_ref(), dict)?;
         project.load_components(mode)?;
         Ok(project)
     }
@@ -116,6 +133,7 @@ impl WarpProject {
     pub(crate) fn bare<P: AsRef<Path>>(work_root: P) -> Self {
         use wp_conf::test_support::ForTest;
         Self::build(work_root.as_ref(), &orion_variate::EnvDict::test_default())
+            .expect("build bare project")
     }
 
     /// 获取工作根目录（向后兼容）
@@ -168,20 +186,46 @@ impl WarpProject {
     /// 清理项目数据目录（委托给各个专门的模块处理）
     pub fn data_clean(&self, dict: &EnvDict) -> RunResult<()> {
         let mut cleaned_any = false;
+        let mut failures: Vec<DataCleanFailure> = Vec::new();
 
         //  清理 sinks 输出数据
-        if let Ok(sink_cleaned) = clean_outputs(self.work_root(), dict) {
-            cleaned_any |= sink_cleaned;
+        match clean_outputs(self.work_root(), dict) {
+            Ok(sink_cleaned) => cleaned_any |= sink_cleaned,
+            Err(error) => failures.push(DataCleanFailure {
+                component: "sinks",
+                error,
+            }),
         }
 
         //  清理 wpgen 生成数据（委托给 WPgenManager）
-        if let Ok(wpgen_cleaned) = self.wpgen_manager.clean_outputs(dict) {
-            cleaned_any |= wpgen_cleaned;
+        match self.wpgen_manager.clean_outputs(dict) {
+            Ok(wpgen_cleaned) => cleaned_any |= wpgen_cleaned,
+            Err(error) => failures.push(DataCleanFailure {
+                component: "wpgen",
+                error,
+            }),
         }
 
         //  清理 wparse 相关临时数据（委托给 WParseManager）
-        if let Ok(wparse_cleaned) = self.wparse_manager.clean_data(dict) {
-            cleaned_any |= wparse_cleaned;
+        match self.wparse_manager.clean_data(dict) {
+            Ok(wparse_cleaned) => cleaned_any |= wparse_cleaned,
+            Err(error) => failures.push(DataCleanFailure {
+                component: "wparse",
+                error,
+            }),
+        }
+
+        if !failures.is_empty() {
+            let detail = format!(
+                "数据清理存在失败项: {}",
+                failures
+                    .iter()
+                    .map(|failure| format!("{}: {}", failure.component, failure.error))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            );
+            let first = failures.into_iter().next().expect("checked non-empty");
+            return Err(first.error.wrap(RunReason::from_conf()).with_detail(detail));
         }
 
         if !cleaned_any {
@@ -195,11 +239,20 @@ impl WarpProject {
 }
 
 pub(crate) fn normalize_work_root(work_root: &Path) -> PathBuf {
+    normalize_work_root_result(work_root).expect("normalize work root")
+}
+
+fn normalize_work_root_result(work_root: &Path) -> RunResult<PathBuf> {
     if work_root.is_absolute() {
-        work_root.to_path_buf()
+        Ok(work_root.to_path_buf())
     } else {
         let rel = work_root.to_path_buf();
-        let base = env::current_dir().unwrap_or_else(|err| panic!("获取当前工作目录失败: {}", err));
-        base.join(&rel)
+        let base = env::current_dir().map_err(|err| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail("resolve current dir failed")
+                .with_source(err)
+        })?;
+        Ok(base.join(&rel))
     }
 }

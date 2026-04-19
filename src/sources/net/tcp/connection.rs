@@ -5,6 +5,7 @@
 
 use crate::sources::event_id::next_event_id;
 use bytes::{Buf, BytesMut};
+use orion_error::ToStructError;
 use std::collections::HashMap;
 use std::io::ErrorKind;
 use std::net::IpAddr;
@@ -175,7 +176,12 @@ impl ConnectionManager {
                                     }
                                     Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                                     Err(e) => {
-                                        return Err(SourceReason::SupplierError(format!("read {} failed: {}", client_ip, e)).into());
+                                        return Err(SourceReason::SupplierError(format!(
+                                            "read {} failed",
+                                            client_ip
+                                        ))
+                                        .to_err()
+                                        .with_source(e));
                                     }
                                 }
                             }
@@ -195,7 +201,12 @@ impl ConnectionManager {
                             }
                         }
                         Err(e) => {
-                            return Err(SourceReason::SupplierError(format!("read {} failed: {}", client_ip, e)).into());
+                            return Err(SourceReason::SupplierError(format!(
+                                "read {} failed",
+                                client_ip
+                            ))
+                            .to_err()
+                            .with_source(e));
                         }
                     }
                 }
@@ -291,7 +302,12 @@ impl ConnectionManager {
                                     }
                                     Err(ref e) if e.kind() == ErrorKind::WouldBlock => break,
                                     Err(e) => {
-                                        return Err(SourceReason::SupplierError(format!("read {} failed: {}", client_ip, e)).into());
+                                        return Err(SourceReason::SupplierError(format!(
+                                            "read {} failed",
+                                            client_ip
+                                        ))
+                                        .to_err()
+                                        .with_source(e));
                                     }
                                 }
                             }
@@ -310,7 +326,12 @@ impl ConnectionManager {
                             }
                         }
                         Err(e) => {
-                            return Err(SourceReason::SupplierError(format!("read {} failed: {}", client_ip, e)).into());
+                            return Err(SourceReason::SupplierError(format!(
+                                "read {} failed",
+                                client_ip
+                            ))
+                            .to_err()
+                            .with_source(e));
                         }
                     }
                 }

@@ -10,19 +10,18 @@ use wp_model_core::raw::RawData;
 use wpl::generator::{CSVGenFmt, JsonGenFmt, KVGenFmt, ProtoGenFmt, RAWGenFmt};
 
 use crate::sinks::SinkRecUnit;
-use crate::types::AnyResult;
 use std::sync::Arc;
-use wp_connector_api::SinkResult;
+use wp_connector_api::{SinkReason, SinkResult};
 use wp_model_core::model::{DataField, DataRecord};
 
-pub fn fds_fmt_proc(fmt: TextFmt, line: DataRecord) -> AnyResult<RawData> {
+pub fn fds_fmt_proc(fmt: TextFmt, line: DataRecord) -> SinkResult<RawData> {
     let formatter = FormatType::from(&fmt);
     let res = RawData::String(format!("{}\n", formatter.fmt_record(&line)));
 
     Ok(res)
 }
 
-pub fn gen_fmt_dat(fmt: TextFmt, line: FmtFieldVec) -> AnyResult<RawData> {
+pub fn gen_fmt_dat(fmt: TextFmt, line: FmtFieldVec) -> SinkResult<RawData> {
     let data = match fmt {
         TextFmt::Json => RawData::String(format!("{}\n", JsonGenFmt(&line))),
         TextFmt::Kv => RawData::String(format!("{}\n", KVGenFmt(&line))),
@@ -30,7 +29,7 @@ pub fn gen_fmt_dat(fmt: TextFmt, line: FmtFieldVec) -> AnyResult<RawData> {
         TextFmt::Csv => RawData::String(format!("{}\n", CSVGenFmt(&line))),
         TextFmt::Raw => RawData::String(format!("{}\n", RAWGenFmt(&line))),
         TextFmt::Proto => {
-            unimplemented!("unsupport proto buf gen")
+            return Err(SinkReason::sink("unsupported proto buf generation").err());
         }
         TextFmt::ProtoText => RawData::String(format!("{}\n", ProtoGenFmt(&line))),
     };

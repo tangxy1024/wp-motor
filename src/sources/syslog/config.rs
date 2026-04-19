@@ -1,7 +1,7 @@
 //! Configuration structures for syslog sources
 
 use super::constants::{DEFAULT_TCP_RECV_BYTES, DEFAULT_UDP_RECV_BUFFER};
-use anyhow::ensure;
+use wp_connector_api::{SourceReason, SourceResult};
 
 /// Configuration for syslog sources
 #[derive(Debug, Clone)]
@@ -27,27 +27,35 @@ pub enum Protocol {
 
 impl SyslogSourceSpec {
     /// Parse configuration directly from params table (Factory path)
-    pub fn from_params(params: &wp_connector_api::ParamMap) -> anyhow::Result<Self> {
+    pub fn from_params(params: &wp_connector_api::ParamMap) -> SourceResult<Self> {
         if let Some(v) = params.get("protocol").and_then(|v| v.as_str()) {
             let p = v.to_ascii_lowercase();
-            ensure!(
-                p == "udp" || p == "tcp",
-                "invalid protocol: {} (must be 'udp' or 'tcp')",
-                v
-            );
+            if p != "udp" && p != "tcp" {
+                return Err(SourceReason::from_conf().err_detail(format!(
+                    "invalid protocol: {} (must be 'udp' or 'tcp')",
+                    v
+                )));
+            }
         }
         if let Some(v) = params.get("tcp_recv_bytes").and_then(|v| v.as_i64()) {
-            ensure!(v > 0, "tcp_recv_bytes must be > 0 (got {})", v);
+            if v <= 0 {
+                return Err(SourceReason::from_conf()
+                    .err_detail(format!("tcp_recv_bytes must be > 0 (got {})", v)));
+            }
         }
         if let Some(v) = params.get("udp_recv_buffer").and_then(|v| v.as_i64()) {
-            ensure!(v > 0, "udp_recv_buffer must be > 0 (got {})", v);
+            if v <= 0 {
+                return Err(SourceReason::from_conf()
+                    .err_detail(format!("udp_recv_buffer must be > 0 (got {})", v)));
+            }
         }
         if let Some(v) = params.get("port").and_then(|v| v.as_i64()) {
-            ensure!(
-                (0..=65535).contains(&v),
-                "port out of range: {} (allow 0 or 1..=65535)",
-                v
-            );
+            if !(0..=65535).contains(&v) {
+                return Err(SourceReason::from_conf().err_detail(format!(
+                    "port out of range: {} (allow 0 or 1..=65535)",
+                    v
+                )));
+            }
         }
 
         let addr = params

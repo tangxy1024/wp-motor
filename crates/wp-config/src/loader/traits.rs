@@ -10,8 +10,8 @@
 //!
 //! ```
 
-use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ToStructError, UvsFrom};
+use orion_conf::error::OrionConfResult;
+use orion_error::{ErrorOweSource, ErrorWith};
 use orion_variate::EnvDict;
 use std::path::Path;
 
@@ -56,16 +56,10 @@ pub trait ConfigLoader: Sized {
     where
         Self: serde::Serialize,
     {
-        let content = std::fs::read_to_string(path).map_err(|e| {
-            ConfIOReason::from_validation()
-                .to_err()
-                .with_detail(format!(
-                    "无法读取 {} 配置文件 {:?}: {}",
-                    Self::config_type_name(),
-                    path,
-                    e
-                ))
-        })?;
+        let content = std::fs::read_to_string(path)
+            .owe_conf_source()
+            .with(path)
+            .want(format!("无法读取 {} 配置文件", Self::config_type_name()))?;
 
         let base = path.parent().unwrap_or_else(|| Path::new("."));
         let config = Self::load_from_str(&content, base, dict)?;
@@ -131,6 +125,8 @@ pub trait ConfigLoader: Sized {
 mod tests {
     use super::*;
     use crate::test_support::ForTest;
+    use orion_conf::error::ConfIOReason;
+    use orion_error::{ToStructError, UvsFrom};
     use serde::Serialize;
 
     // 用于测试的简单配置类型

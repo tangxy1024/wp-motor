@@ -1,7 +1,7 @@
 use super::defs::ConnectorTomlFile;
 use orion_conf::EnvTomlLoad;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
+use orion_error::{ErrorOweSource, ErrorWith, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::collections::BTreeMap;
 use std::fs;
@@ -13,7 +13,7 @@ fn collect_connector_files(dir: &Path) -> OrionConfResult<Vec<PathBuf>> {
         return Ok(Vec::new());
     }
     let mut files: Vec<PathBuf> = fs::read_dir(dir)
-        .owe_conf()
+        .owe_conf_source()
         .with(dir)?
         .filter_map(|e| e.ok())
         .map(|e| e.path())

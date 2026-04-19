@@ -1,3 +1,4 @@
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 
 use crate::utils::LogHandler;
@@ -27,6 +28,7 @@ impl WParseManager {
     /// 清理 WParse 相关数据
     pub fn clean_data(&self, dict: &EnvDict) -> wp_error::run_error::RunResult<bool> {
         let mut did_clean_any = false;
+        let mut failures = Vec::new();
 
         // 1. 清理 .run 目录
         let run_dir = self.work_root.join(".run");
@@ -37,7 +39,7 @@ impl WParseManager {
                     did_clean_any = true;
                 }
                 Err(e) => {
-                    eprintln!("Warning: Failed to remove .run directory: {}", e);
+                    failures.push(format!("remove .run directory: {}", e));
                 }
             }
         }
@@ -50,8 +52,14 @@ impl WParseManager {
                 }
             }
             Err(e) => {
-                eprintln!("Warning: Failed to clean logs using WpEngine: {}", e);
+                failures.push(format!("clean logs: {}", e));
             }
+        }
+
+        if !failures.is_empty() {
+            return Err(wp_error::RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("清理 wparse 数据失败: {}", failures.join(" | "))));
         }
 
         Ok(did_clean_any)

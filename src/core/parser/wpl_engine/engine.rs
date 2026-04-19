@@ -3,9 +3,9 @@
 use crate::core::parser::wpl_engine::parser::MultiParser;
 use crate::core::parser::{ParseOption, WplPipeline, WplRepository};
 use crate::stat::MonSend;
-use crate::types::AnyResult;
 use getset::Getters;
 use wp_connector_api::SourceEvent;
+use wp_error::run_error::RunResult;
 use wpl::WparseResult;
 
 use crate::core::parser::indexing::ResourceIndexer;
@@ -20,7 +20,7 @@ pub struct WplEngine {
 }
 
 impl WplEngine {
-    pub(crate) fn from(pipe_lines: Vec<WplPipeline>, infra: InfraSinkAgent) -> AnyResult<Self> {
+    pub(crate) fn from(pipe_lines: Vec<WplPipeline>, infra: InfraSinkAgent) -> RunResult<Self> {
         // 规则命中排序
         //let mut pipelines = pipe_lines;
         //pipelines.sort_by(|a, b| b.hit_cnt.cmp(&a.hit_cnt));
@@ -31,7 +31,7 @@ impl WplEngine {
         })
     }
 
-    pub fn from_code(wpl_spc: &WplRepository, infra: InfraSinkAgent) -> AnyResult<Self> {
+    pub fn from_code(wpl_spc: &WplRepository, infra: InfraSinkAgent) -> RunResult<Self> {
         let mut idx = ResourceIndexer::default();
         let mut pipelines = Vec::new();
         for pkg in &wpl_spc.packages {

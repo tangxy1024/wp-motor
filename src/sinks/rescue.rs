@@ -70,17 +70,19 @@ pub struct RescueFileSink {
 }
 
 impl RescueFileSink {
-    pub async fn new(out_path: &str) -> AnyResult<Self> {
+    pub async fn new(out_path: &str) -> SinkResult<Self> {
         if let Some(parent) = Path::new(out_path).parent()
             && !parent.exists()
         {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent)
+                .map_err(|e| SinkReason::sink("create rescue directory failed").err_source(e))?;
         }
         let file = OpenOptions::new()
             .append(true)
             .create(true)
             .open(out_path)
-            .await?;
+            .await
+            .map_err(|e| SinkReason::sink("open rescue file failed").err_source(e))?;
         Ok(Self {
             path: out_path.to_string(),
             writer: BufWriter::with_capacity(102_400, file),
@@ -88,17 +90,27 @@ impl RescueFileSink {
         })
     }
 
-    fn sink_err<E: std::fmt::Display>(err: E) -> SinkError {
-        SinkError::from(SinkReason::Sink(err.to_string()))
+    fn sink_err<E>(message: &'static str, err: E) -> SinkError
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        SinkReason::sink(message).err_source(err)
     }
 
     async fn write_entry(&mut self, entry: &RescueEntry) -> SinkResult<()> {
-        let mut line = serde_json::to_vec(entry).map_err(Self::sink_err)?;
+        let mut line =
+            serde_json::to_vec(entry).map_err(|e| Self::sink_err("serialize rescue entry failed", e))?;
         line.push(b'\n');
-        self.writer.write_all(&line).await.map_err(Self::sink_err)?;
+        self.writer
+            .write_all(&line)
+            .await
+            .map_err(|e| Self::sink_err("write rescue entry failed", e))?;
         self.proc_cnt += 1;
         if self.proc_cnt.is_multiple_of(RESCUE_FLUSH_INTERVAL) {
-            self.writer.flush().await.map_err(Self::sink_err)?;
+            self.writer
+                .flush()
+                .await
+                .map_err(|e| Self::sink_err("flush rescue file failed", e))?;
         }
         Ok(())
     }
@@ -120,7 +132,10 @@ impl Drop for RescueFileSink {
 #[async_trait]
 impl AsyncCtrl for RescueFileSink {
     async fn stop(&mut self) -> SinkResult<()> {
-        self.writer.flush().await.map_err(Self::sink_err)?;
+        self.writer
+            .flush()
+            .await
+            .map_err(|e| Self::sink_err("flush rescue file failed", e))?;
         if let Some(new_path) = self.path.strip_suffix(".lock")
             && let Err(e) = fs::rename(&self.path, new_path)
         {

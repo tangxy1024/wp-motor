@@ -7,7 +7,7 @@ use crate::sinks::SinkGroupAgent;
 use oml::core::ConfADMExt;
 use oml::language::{DataModel, ObjModel};
 use orion_conf::{ErrorWith, UvsFrom};
-use orion_error::{ErrorConv, ErrorOwe, OperationContext, ToStructError};
+use orion_error::{ErrorConv, ErrorOwe, ErrorOweSource, OperationContext, ToStructError};
 use orion_variate::EnvDict;
 use wp_conf::engine::EngineConfig;
 use wp_error::RunReason;
@@ -84,7 +84,9 @@ impl ResManager {
         let infra_d = Path::new(sink_root).join("infra.d");
         if busin_d.exists() || infra_d.exists() {
             let confs = wp_conf::sinks::load_business_route_confs_with(sink_root, &Lookup, dict)
-                .err_conv()?;
+                .owe_conf_source()
+                .with(sink_root)
+                .want("load sink route confs")?;
             for mut conf in confs {
                 // 现有的方法正确处理 FlexGroup rule 和 oml 字段
                 self.update_sink_rule_index(&wpl_index, &mut conf);
@@ -95,7 +97,9 @@ impl ResManager {
             op.mark_suc();
             Ok(sink_route)
         } else {
-            RunReason::from_conf().err_result()
+            Err(RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("sink route dirs not found under '{}'", sink_root)))
         }
     }
 }

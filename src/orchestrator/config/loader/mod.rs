@@ -119,6 +119,50 @@ output = "file"
     }
 
     #[test]
+    fn test_wpgen_output_connect_reports_missing_sink_detail() -> AnyResult<()> {
+        let tw = TestCasePath::new("wp", "wpgen_missing_sink")?;
+        let path = tw.path_string();
+        let cm = WarpConf::new(&path);
+
+        let cdir = format!("{}/connectors/sink.d", cm.work_root_path());
+        std::fs::create_dir_all(&cdir)?;
+        let cfile = format!("{}/connectors/sink.d/tcp_sink.toml", cm.work_root_path());
+        let connectors = r#"
+[[connectors]]
+id = "tcp_sink"
+type = "tcp"
+allow_override = ["addr", "port"]
+[connectors.params]
+addr = "127.0.0.1"
+port = 9000
+"#;
+        fs::write(cfile, connectors)?;
+        let toml = r#"
+version = "1.0"
+[generator]
+mode = "rule"
+speed = 1
+[output]
+connect = "tcp_src"
+[logging]
+level = "info"
+output = "stdout"
+"#;
+        let p = cm.ensure_config_path_exists(WPGEN_TOML)?;
+        fs::write(&p, toml)?;
+        let err = cm
+            .load_wpgen_config(WPGEN_TOML, &EnvDict::test_default())
+            .unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("[output].connect 'tcp_src'"), "msg={}", msg);
+        assert!(msg.contains("connectors/sink.d"), "msg={}", msg);
+        assert!(msg.contains("tcp_sink"), "msg={}", msg);
+        assert!(msg.contains("not a source connector id"), "msg={}", msg);
+        cm.clear_work_directory();
+        Ok(())
+    }
+
+    #[test]
     fn test_wpgen_resolved_override_not_allowed() -> AnyResult<()> {
         let tw = TestCasePath::new("wp", "wpgen_resolved_2")?;
         let path = tw.path_string();

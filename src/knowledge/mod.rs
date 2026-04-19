@@ -13,6 +13,23 @@ pub fn attach_stats_monitor_sender(mon_send: crate::stat::MonSend) {
     stats_bridge::attach_stats_monitor_sender(mon_send);
 }
 
+pub fn log_missing_knowdb_config(prefix: &str, conf: &Path) {
+    warn_ctrl!(
+        "{}knowdb config not found at {}; skip knowdb init",
+        prefix,
+        conf.display()
+    );
+}
+
+pub fn log_knowdb_init_error(prefix: &str, conf: &Path, err: &impl std::fmt::Debug) {
+    warn_ctrl!(
+        "{}init knowdb skipped ({}): {:#?}",
+        prefix,
+        conf.display(),
+        err
+    );
+}
+
 #[derive(Clone, Debug)]
 pub struct KnowdbHandler {
     root: Arc<PathBuf>,
@@ -52,7 +69,11 @@ impl KnowdbHandler {
                 info_ctrl!("init thread-cloned knowdb provider success ");
             }
             Err(err) => {
-                warn_ctrl!("init thread-cloned knowdb provider failed: {}", err);
+                warn_ctrl!(
+                    "init thread-cloned knowdb provider failed (conf={}): {:#?}",
+                    self.conf.display(),
+                    err
+                );
             }
         }
     }

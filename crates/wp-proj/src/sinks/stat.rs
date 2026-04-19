@@ -69,7 +69,10 @@ pub fn stat_file_combined(
         &main,
         &ctx,
         dict,
-    );
+    )
+    .owe_conf()
+    .with(&ctx.work_root)
+    .want("collect source file stats")?;
 
     // Collect sink statistics
     let sink_root = Path::new(&cm.work_root_path()).join(main.sink_root());
@@ -101,7 +104,10 @@ pub(crate) fn ensure_sink_dirs(sink_root: &Path, _sink_root_conf: &str) -> RunRe
     if has_v2_dirs(sink_root) {
         Ok(())
     } else {
-        Err(RunReason::from_conf().to_err())
+        Err(RunReason::from_conf().to_err().with_detail(format!(
+            "sink root not found or missing v2 layout: {}",
+            sink_root.display()
+        )))
     }
 }
 

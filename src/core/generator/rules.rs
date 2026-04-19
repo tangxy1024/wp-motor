@@ -22,8 +22,7 @@ use wpl::{
     generator::{FieldsGenRule, FmtFieldVec, GenChannel, NamedFieldGF},
 };
 
-use crate::{resources::OmlRepository, stat::MonSend, types::AnyResult};
-use anyhow::anyhow;
+use crate::{resources::OmlRepository, stat::MonSend};
 use wp_log::info_ctrl;
 
 #[derive(Clone)]
@@ -44,7 +43,7 @@ impl GenRuleUnit {
     pub fn is_empty(&self) -> bool {
         self.package.is_empty()
     }
-    pub async fn send_stat(&mut self, _mon_s: &MonSend) -> AnyResult<()> {
+    pub async fn send_stat(&mut self, _mon_s: &MonSend) -> ConfResult<()> {
         //roll queue to send stat
         let len = self.package.rules.len();
         for _ in 0..len {
@@ -56,10 +55,10 @@ impl GenRuleUnit {
         }
         Ok(())
     }
-    pub fn generat(&mut self) -> AnyResult<Vec<FmtFieldVec>> {
+    pub fn generat(&mut self) -> ConfResult<Vec<FmtFieldVec>> {
         let mut result = Vec::new();
         if self.get_rules().is_empty() {
-            return Err(anyhow!("rule unit is empty!"));
+            return Err(ConfError::from(ConfReason::NotFound("rule unit is empty".into())));
         }
         let ups_sep = WplSep::default();
         for wpl_rule in self.get_rules() {
@@ -72,10 +71,29 @@ impl GenRuleUnit {
                         .as_ref()
                         .and_then(|name| self.get_fields().get(name));
                     let mut ch = GenChannel::new();
-                    let meta = DataType::from(f_conf.meta_name.as_str())?;
-                    let parser = ParserFactory::create(&meta)?;
+                    let meta = DataType::from(f_conf.meta_name.as_str()).map_err(|e| {
+                        ConfError::from(ConfReason::Syntax(format!(
+                            "invalid field meta '{}': {}",
+                            f_conf.meta_name, e
+                        )))
+                    })?;
+                    let parser = ParserFactory::create(&meta).map_err(|e| {
+                        ConfError::from(ConfReason::Syntax(format!(
+                            "create parser for meta '{}' failed: {}",
+                            f_conf.meta_name, e
+                        )))
+                    })?;
                     let sep = group.resolve_sep(&ups_sep);
-                    let field = parser.generate(&mut ch, &sep, f_conf, rule)?;
+                    let field = parser.generate(&mut ch, &sep, f_conf, rule).map_err(|e| {
+                        ConfError::from(ConfReason::Syntax(format!(
+                            "generate field '{}' failed: {}",
+                            f_conf
+                                .name
+                                .as_deref()
+                                .unwrap_or(f_conf.meta_name.as_str()),
+                            e
+                        )))
+                    })?;
                     fieldset.push(field);
                 }
             }

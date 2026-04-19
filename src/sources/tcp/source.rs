@@ -3,6 +3,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use async_trait::async_trait;
+use orion_error::ToStructError;
 use tokio::sync::mpsc;
 use wp_connector_api::{CtrlRx, DataSource, SourceBatch, SourceReason, SourceResult, Tags};
 
@@ -345,11 +346,9 @@ impl DataSource for TcpSource {
                     self.awaiting_logged = true;
                 }
                 if !self.wait_for_connection().await? {
-                    return Err(SourceReason::Disconnect(format!(
-                        "TCP source '{}' no active connections",
-                        self.key
-                    ))
-                    .into());
+                    return Err(SourceReason::Disconnect("tcp source has no active connections".into())
+                        .to_err()
+                        .with_detail(format!("TCP source '{}' no active connections", self.key)));
                 }
                 continue;
             }

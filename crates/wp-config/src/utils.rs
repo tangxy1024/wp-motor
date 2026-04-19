@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Context;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{ToStructError, TomlIO};
-use orion_error::{ErrorOwe, ErrorOweBase, ErrorWith, UvsFrom};
+use orion_error::{ErrorOweSource, ErrorOweSourceBase, ErrorWith, UvsFrom};
 use orion_variate::EnvEvaluable;
 use serde::Serialize;
 use wp_connector_api::ParamMap;
@@ -40,7 +40,7 @@ where
             // ensure parent directory exists
             if let Some(parent) = path_ref.parent() {
                 std::fs::create_dir_all(parent)
-                    .owe_conf()
+                    .owe_conf_source()
                     .want("crate dir")
                     .with(parent)?;
             }
@@ -64,16 +64,16 @@ pub fn save_data<P: AsRef<Path>>(
             let path = dst_ref;
             if let Some(value) = path.parent() {
                 std::fs::create_dir_all(value)
-                    .owe_conf()
+                    .owe_conf_source()
                     .want("create dir")
                     .with(value)?;
             }
             let mut file = std::fs::File::create(path)
-                .owe_conf()
+                .owe_conf_source()
                 .want("create file")
                 .with(path)?;
             file.write_all(conf.as_bytes())
-                .owe_conf()
+                .owe_conf_source()
                 .want("save data")
                 .with(path)?;
             info_ctrl!("save data file suc : {} ", dst_ref.display());
@@ -86,11 +86,11 @@ pub fn backup_clean<P: AsRef<Path>>(path: P) -> OrionConfResult<()> {
     let path_ref = path.as_ref();
     if path_ref.exists() {
         std::fs::copy(path_ref, format!("{}.bak", path_ref.display()))
-            .owe_conf()
+            .owe_conf_source()
             .want("copy file")
             .with(path_ref)?;
         std::fs::remove_file(path_ref)
-            .owe_conf()
+            .owe_conf_source()
             .want("remove file")
             .with(path_ref)?;
     }
@@ -189,15 +189,15 @@ pub fn find_group_conf(
 ) -> ConfResult<Vec<PathGroup>> {
     let mut found = Vec::new();
     let entries = fs::read_dir(path)
-        .owe(ConfReason::NotFound("file miss".into()))
+        .owe_source(ConfReason::NotFound("file miss".into()))
         .with(path.to_string())?;
     let mut first = None;
     let mut second = None;
     for entry in entries {
-        let entry = entry.owe(ConfReason::Syntax("bad entry".into()))?;
+        let entry = entry.owe_source(ConfReason::Syntax("bad entry".into()))?;
         let file_type = entry
             .file_type()
-            .owe(ConfReason::NotFound("file type error".into()))?;
+            .owe_source(ConfReason::NotFound("file type error".into()))?;
         if file_type.is_dir() {
             let sub = entry.path();
             if let Some(sub_str) = sub.to_str() {

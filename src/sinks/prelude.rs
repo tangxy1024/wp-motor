@@ -11,5 +11,3 @@ pub use wp_model_core::model::Value;
 pub use wp_connector_api::{
     AsyncCtrl, AsyncRawDataSink as AsyncRawdatSink, AsyncRecordSink, AsyncSink,
 };
-// For external sinks registry bridge
-pub use crate::types::AnyResult;

@@ -27,7 +27,6 @@ use wp_connector_api::{SinkReason, SinkResult};
 use wp_error::error_handling::{ErrorHandlingStrategy, sys_robust_mode};
 use wp_model_core::raw::RawData;
 
-use crate::types::AnyResult;
 use orion_error::{ErrorOwe, ErrorWith};
 use wp_connector_api::SinkError;
 use wp_stat::StatRecorder;
@@ -149,7 +148,7 @@ impl SinkRuntime {
     pub fn get_cond(&self) -> Option<&Expression<DataField, RustSymbol>> {
         self.cond.as_ref()
     }
-    pub async fn swap_backsink(&mut self) -> AnyResult<Option<SinkBackendType>> {
+    pub async fn swap_backsink(&mut self) -> SinkResult<Option<SinkBackendType>> {
         let now = Utc::now();
         let fmt_time = now.format("%Y-%m-%d_%H:%M:%S").to_string();
         // 使用全局序号确保文件名唯一性，避免同一秒内重复创建相同文件名
@@ -161,7 +160,7 @@ impl SinkRuntime {
         let out_path = Path::new(&file_path);
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| SinkError::from(SinkReason::Sink(e.to_string())))?;
+                .map_err(|e| SinkReason::sink("create rescue sink directory failed").err_source(e))?;
         }
         info_ctrl!("crate out file use async mode {}", file_path);
         let back = RescueFileSink::new(&file_path).await?;
@@ -238,7 +237,7 @@ impl SinkRuntime {
                 SinkDataEnum::FFV(dat) => {
                     let raw = TextFmt::Raw
                         .gen_data(dat.clone())
-                        .map_err(|e| SinkError::from(SinkReason::Sink(e.to_string())))?;
+                        .map_err(|e| e.with("ffv").want("render raw payload"))?;
                     match raw {
                         RawData::String(line) => self.primary.sink_str(&line).await,
                         RawData::Bytes(bytes) => self.primary.sink_bytes(&bytes).await,
@@ -427,7 +426,7 @@ impl SinkRuntime {
             for unit in package.iter() {
                 let raw = TextFmt::Raw
                     .gen_data(unit.data().clone())
-                    .map_err(|e| SinkError::from(SinkReason::Sink(e.to_string())))
+                    .map_err(|e| e.with("ffv_batch").want("render raw payload"))
                     .unwrap_or_else(|_| RawData::String("".to_string()));
                 match raw {
                     RawData::String(s) => raw_strings.push(s),
@@ -725,9 +724,7 @@ impl SinkRuntime {
             Ok(None) => {
                 warn_data!("swap_back returned None for sink {}", self.name);
             }
-            Err(err) => {
-                return Err(SinkError::from(SinkReason::Sink(err.to_string())));
-            }
+            Err(err) => return Err(err),
         }
         Ok(())
     }

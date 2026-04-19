@@ -1,3 +1,8 @@
+use orion_conf::{
+    ToStructError,
+    error::{ConfIOReason, OrionConfResult},
+};
+use orion_error::UvsFrom;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq, Clone, derive_getters::Getters, Default)]
@@ -18,39 +23,50 @@ pub struct SinkExpectOverride {
 }
 
 impl SinkExpectOverride {
-    pub fn validate(&self) -> crate::types::AnyResult<()> {
-        use anyhow::bail;
+    pub fn validate(&self) -> OrionConfResult<()> {
         let in_min_max = |v: f64| v.is_finite() && (0.0..=1000.0).contains(&v);
         if let Some(r) = self.ratio
             && !in_min_max(r)
         {
-            bail!("ratio must be in [0,1], got {}", r);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("ratio must be in [0,1], got {}", r)));
         }
         if let Some(t) = self.tol
             && !(t >= 0.0 && t.is_finite())
         {
-            bail!("tol must be >= 0, got {}", t);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("tol must be >= 0, got {}", t)));
         }
         if let Some(mn) = self.min
             && !in_min_max(mn)
         {
-            bail!("min must be in [0,1000], got {}", mn);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("min must be in [0,1000], got {}", mn)));
         }
         if let Some(mx) = self.max
             && !in_min_max(mx)
         {
-            bail!("max must be in [0,1000], got {}", mx);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("max must be in [0,1000], got {}", mx)));
         }
         if let (Some(mn), Some(mx)) = (self.min, self.max)
             && mn > mx
         {
-            bail!("min must be <= max ({} > {})", mn, mx);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("min must be <= max ({} > {})", mn, mx)));
         }
         // 互斥：ratio/tol 与 min/max 不建议同时出现
         let has_rt = self.ratio.is_some() || self.tol.is_some();
         let has_mm = self.min.is_some() || self.max.is_some();
         if has_rt && has_mm {
-            bail!("expect: ratio/tol cannot be combined with min/max; choose one style");
+            return Err(ConfIOReason::from_validation().to_err().with_detail(
+                "expect: ratio/tol cannot be combined with min/max; choose one style",
+            ));
         }
         Ok(())
     }

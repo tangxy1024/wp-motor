@@ -435,14 +435,11 @@ async fn load_engine_res(
                 knowdb_handler = Some(handler);
             }
             Err(err) => {
-                warn_ctrl!("init knowdb skipped ({}): {}", knowdb_path.display(), err);
+                crate::knowledge::log_knowdb_init_error("", &knowdb_path, &err);
             }
         }
     } else {
-        warn_ctrl!(
-            "knowdb config not found at {}; skip knowdb init",
-            knowdb_path.display()
-        );
+        crate::knowledge::log_missing_knowdb_config("", &knowdb_path);
     }
 
     let infra_sinks = InfraSinkService::default_ins(
@@ -558,14 +555,11 @@ async fn load_processing_res(
                 knowdb_handler = Some(handler);
             }
             Err(err) => {
-                warn_ctrl!("init knowdb skipped ({}): {}", knowdb_path.display(), err);
+                crate::knowledge::log_knowdb_init_error("", &knowdb_path, &err);
             }
         }
     } else {
-        warn_ctrl!(
-            "knowdb config not found at {}; skip knowdb init",
-            knowdb_path.display()
-        );
+        crate::knowledge::log_missing_knowdb_config("", &knowdb_path);
     }
 
     let infra_sinks = InfraSinkService::default_ins(

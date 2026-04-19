@@ -87,7 +87,7 @@
 //! ```
 
 use orion_conf::ErrorWith;
-use orion_error::{ErrorOwe, ToStructError, UvsFrom};
+use orion_error::{ErrorOweSource, ToStructError, UvsFrom};
 use std::path::Path;
 use wp_error::run_error::{RunReason, RunResult};
 
@@ -99,8 +99,10 @@ pub struct ErrorHandler;
 #[allow(dead_code)]
 impl ErrorHandler {
     /// 创建配置相关错误
-    pub fn config_error(_message: impl Into<String>) -> RunResult<()> {
-        Err(RunReason::from_conf().to_err().with(_message.into()))
+    pub fn config_error(message: impl Into<String>) -> RunResult<()> {
+        Err(RunReason::from_conf()
+            .to_err()
+            .with_detail(message.into()))
     }
 
     /// 创建文件操作相关错误
@@ -126,9 +128,8 @@ impl ErrorHandler {
 
     /// 检查文件是否为空
     pub fn check_file_not_empty(path: &Path, description: &str) -> RunResult<()> {
-        if let Ok(content) = std::fs::read_to_string(path)
-            && content.trim().is_empty()
-        {
+        let content = Self::safe_read_file(path)?;
+        if content.trim().is_empty() {
             return Self::config_error(format!("配置错误: {} 文件为空: {:?}", description, path));
         }
         Ok(())
@@ -140,7 +141,7 @@ impl ErrorHandler {
         path: &Path,
         op: impl FnOnce() -> Result<T, std::io::Error>,
     ) -> RunResult<T> {
-        op().owe_conf().with(path).want(operation)
+        op().owe_conf_source().with(path).want(operation)
     }
 
     /// 安全创建目录
@@ -167,19 +168,33 @@ impl ErrorHandler {
     }
 
     /// 转换和包装错误
-    pub fn wrap_error<T>(
-        result: Result<T, Box<dyn std::error::Error>>,
+    pub fn wrap_error<T, E>(
+        result: Result<T, E>,
         context: &str,
-    ) -> RunResult<T> {
-        result.owe_conf().with(context).want("wrap error")
+        actual_operation: impl Into<String>,
+    ) -> RunResult<T>
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        result
+            .owe_conf_source()
+            .with(context)
+            .want(actual_operation)
     }
 
     /// 转换和包装错误 (支持 &str context)
-    pub fn wrap_error_str<T>(
-        result: Result<T, Box<dyn std::error::Error>>,
+    pub fn wrap_error_str<T, E>(
+        result: Result<T, E>,
         context: &str,
-    ) -> RunResult<T> {
-        result.owe_conf().with(context).want("wrap error")
+        actual_operation: impl Into<String>,
+    ) -> RunResult<T>
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        result
+            .owe_conf_source()
+            .with(context)
+            .want(actual_operation)
     }
 
     /// 创建验证错误
@@ -212,8 +227,22 @@ mod tests {
 
     #[test]
     fn wrap_error_formats_context() {
-        let err = ErrorHandler::wrap_error::<()>(Err("boom".into()), "ctx").unwrap_err();
+        let err = ErrorHandler::wrap_error(
+            Err::<(), std::io::Error>(std::io::Error::other("boom")),
+            "ctx",
+            "run demo",
+        )
+        .unwrap_err();
         assert!(err.to_string().contains("ctx"));
         assert!(err.to_string().contains("boom"));
+    }
+
+    #[test]
+    fn check_file_not_empty_preserves_read_error() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let missing = temp.path().join("missing.txt");
+        let err = ErrorHandler::check_file_not_empty(&missing, "missing").unwrap_err();
+        assert!(err.to_string().contains("read file"));
+        assert!(err.to_string().contains("missing.txt"));
     }
 }

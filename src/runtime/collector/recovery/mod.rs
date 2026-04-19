@@ -4,13 +4,12 @@ use crate::sinks::{ProcMeta, RescueEntry, RescuePayload, SinkRouteAgent};
 use crate::stat::metric_collect::MetricCollectors;
 use crate::stat::{MonSend, STAT_INTERVAL_MS};
 use chrono::NaiveDateTime;
-use wp_connector_api::{SinkError, SinkReason, SinkResult};
+use wp_connector_api::{SinkReason, SinkResult};
 
 use wp_error::RunErrorOwe;
 use wp_error::run_error::RunResult;
 use wp_stat::StatReq;
 
-use crate::types::AnyResult;
 use wp_stat::StatRecorder;
 
 use orion_error::ErrorOwe;
@@ -271,9 +270,7 @@ impl ActCovPicker {
         F: FnMut(&SinkTerminal) -> SinkResult<()>,
     {
         if sink_agents.is_empty() {
-            return Err(SinkError::from(SinkReason::Sink(
-                "no sink candidates for recovery".to_string(),
-            )));
+            return Err(SinkReason::sink("no sink candidates for recovery").err());
         }
 
         let total = sink_agents.len();
@@ -347,11 +344,11 @@ impl RescueFiles {
         time.and_utc().timestamp()
     }
 
-    pub fn tack_lasts_file(&self, ends: &str) -> AnyResult<Option<String>> {
+    pub fn tack_lasts_file(&self, ends: &str) -> RunResult<Option<String>> {
         let mut files = Vec::new();
         let paths = WalkDir::new(&self.path);
         for entry in paths {
-            let entry = entry?;
+            let entry = entry.owe_data()?;
             let path = entry.path();
 
             // 收集 rescue 根目录下的所有子孙文件（不再限制必须为直接子文件）
@@ -373,19 +370,19 @@ impl RescueFiles {
 pub struct CheckPoint(HashMap<String, usize>);
 
 impl CheckPoint {
-    pub fn save_point(&mut self) -> AnyResult<()> {
-        let point = serde_json::to_string(self)?;
+    pub fn save_point(&mut self) -> RunResult<()> {
+        let point = serde_json::to_string(self).owe_data()?;
         let path = Path::new(POINT_PATH);
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).owe_sys()?;
         }
-        fs::write(POINT_PATH, point)?;
+        fs::write(POINT_PATH, point).owe_sys()?;
         Ok(())
     }
 
-    pub fn load_point() -> AnyResult<CheckPoint> {
+    pub fn load_point() -> RunResult<CheckPoint> {
         let point = match fs::read_to_string(POINT_PATH) {
-            Ok(val) => serde_json::from_str(&val)?,
+            Ok(val) => serde_json::from_str(&val).owe_data()?,
             Err(_) => CheckPoint::default(),
         };
         Ok(point)
@@ -409,8 +406,8 @@ mod tests {
     use crate::runtime::collector::recovery::{
         ActCovPicker, CheckPoint, RescueFiles, relative_rescue_display_path,
     };
-    use crate::types::AnyResult;
     use orion_error::TestAssert;
+    use wp_error::run_error::RunResult;
 
     use std::fs;
 
@@ -439,7 +436,7 @@ mod tests {
 
     //test tack_lasts_file
     #[test]
-    fn test_tack_lasts_file() -> AnyResult<()> {
+    fn test_tack_lasts_file() -> RunResult<()> {
         fs::create_dir_all("rescue1").assert();
         fs::write(
             "rescue1/benchmark_file_sink-2023-12-06_12:07:02.dat",
@@ -469,7 +466,7 @@ mod tests {
 
     // 支持递归子目录：嵌套路径也能被扫描与挑选
     #[test]
-    fn test_tack_lasts_file_nested() -> AnyResult<()> {
+    fn test_tack_lasts_file_nested() -> RunResult<()> {
         fs::create_dir_all("rescue_nested/group1").assert();
         fs::write(
             "rescue_nested/group1/bench_sink-2025-10-14_03:10:11.dat",

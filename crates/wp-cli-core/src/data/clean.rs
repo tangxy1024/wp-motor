@@ -1,4 +1,5 @@
-use anyhow::Result;
+use orion_conf::error::OrionConfResult;
+use orion_error::ErrorWith;
 use orion_variate::EnvDict;
 use std::fs;
 use std::path::Path;
@@ -24,14 +25,15 @@ impl DataCleanReport {
 }
 
 /// Clean file-like outputs for all configured sinks under sink_root (business.d/infra.d)
-pub fn clean_outputs(sink_root: &Path, env_dict: &EnvDict) -> Result<DataCleanReport> {
+pub fn clean_outputs(sink_root: &Path, env_dict: &EnvDict) -> OrionConfResult<DataCleanReport> {
     let mut rep = DataCleanReport::default();
     if !(sink_root.join("business.d").exists() || sink_root.join("infra.d").exists()) {
         return Ok(rep);
     }
     for conf in
         wp_conf::sinks::load_infra_route_confs(sink_root.to_string_lossy().as_ref(), env_dict)
-            .unwrap_or_default()
+            .with(sink_root)
+            .want("load infra sink routes for clean")?
     {
         for s in conf.sink_group.sinks.iter() {
             append_clean_item(&mut rep, s)?;
@@ -39,7 +41,8 @@ pub fn clean_outputs(sink_root: &Path, env_dict: &EnvDict) -> Result<DataCleanRe
     }
     for conf in
         wp_conf::sinks::load_business_route_confs(sink_root.to_string_lossy().as_ref(), env_dict)
-            .unwrap_or_default()
+            .with(sink_root)
+            .want("load business sink routes for clean")?
     {
         for s in conf.sink_group.sinks.iter() {
             append_clean_item(&mut rep, s)?;
@@ -48,7 +51,7 @@ pub fn clean_outputs(sink_root: &Path, env_dict: &EnvDict) -> Result<DataCleanRe
     Ok(rep)
 }
 
-fn append_clean_item(rep: &mut DataCleanReport, s: &SinkInstanceConf) -> Result<()> {
+fn append_clean_item(rep: &mut DataCleanReport, s: &SinkInstanceConf) -> OrionConfResult<()> {
     let path = s.resolve_file_path();
     if let Some(p) = &path {
         let existed = Path::new(p).exists();
@@ -71,4 +74,49 @@ fn append_clean_item(rep: &mut DataCleanReport, s: &SinkInstanceConf) -> Result<
         });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean_outputs;
+    use orion_variate::EnvDict;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use wp_conf::test_support::ForTest;
+
+    fn tmp_dir(prefix: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let mut p = std::env::temp_dir();
+        p.push(format!("{}_{}", prefix, nanos));
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn clean_outputs_reports_route_config_errors() {
+        let root = tmp_dir("wpcli_clean_invalid");
+        let sink_root = root.join("sink");
+        let biz = sink_root.join("business.d");
+        fs::create_dir_all(&biz).unwrap();
+        fs::write(
+            biz.join("broken.toml"),
+            r#"version = "2.0"
+
+[sink_group]
+name = "broken"
+rule = ["/demo"]
+oml = ["demo"]
+"#,
+        )
+        .unwrap();
+
+        let err = clean_outputs(&sink_root, &EnvDict::test_default())
+            .expect_err("invalid sink route config should fail");
+        let msg = format!("{:#}", err);
+        assert!(msg.contains("validation error"));
+        assert!(msg.contains("group 'broken' has no sinks"));
+    }
 }

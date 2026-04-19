@@ -12,7 +12,9 @@ use wp_error::run_error::{RunReason, RunResult};
 pub fn parse_wpl_samples(work_root: &str, dict: &EnvDict) -> RunResult<()> {
     let jobs = discover_sample_jobs(work_root, dict)?;
     if jobs.is_empty() {
-        return Err(RunReason::from_conf().to_err());
+        return Err(RunReason::from_conf()
+            .to_err()
+            .with_detail("no sample.dat with matching .wpl found"));
     }
 
     let mut results: u32 = 0;

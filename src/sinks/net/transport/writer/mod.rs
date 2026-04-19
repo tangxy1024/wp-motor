@@ -2,7 +2,7 @@ use socket2::{Domain, Protocol, Socket, Type};
 use std::net::SocketAddr;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, UdpSocket};
-use wp_connector_api::{SinkError, SinkReason, SinkResult};
+use wp_connector_api::{SinkReason, SinkResult};
 
 use super::config::*; // reuse constants/policy/adaptive toggles
 
@@ -55,23 +55,34 @@ pub struct NetWriter {
 
 impl NetWriter {
     /// 建立 UDP 连接（复用 syslog sink 的缓冲设置与本地绑定策略）
-    pub async fn connect_udp(addr: &str) -> anyhow::Result<Self> {
-        let target: SocketAddr = addr.parse()?;
+    pub async fn connect_udp(addr: &str) -> SinkResult<Self> {
+        let target: SocketAddr = addr
+            .parse()
+            .map_err(|e| SinkReason::sink("parse udp target address failed").err_source(e))?;
         let domain = match target {
             SocketAddr::V4(_) => Domain::IPV4,
             SocketAddr::V6(_) => Domain::IPV6,
         };
-        let sock = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))?;
+        let sock = Socket::new(domain, Type::DGRAM, Some(Protocol::UDP))
+            .map_err(|e| SinkReason::sink("create udp socket failed").err_source(e))?;
         let _ = sock.set_send_buffer_size(4 * 1024 * 1024);
         let local: SocketAddr = match target {
-            SocketAddr::V4(_) => "0.0.0.0:0".parse()?,
-            SocketAddr::V6(_) => "[::]:0".parse()?,
+            SocketAddr::V4(_) => "0.0.0.0:0"
+                .parse()
+                .map_err(|e| SinkReason::sink("parse local udp bind address failed").err_source(e))?,
+            SocketAddr::V6(_) => "[::]:0"
+                .parse()
+                .map_err(|e| SinkReason::sink("parse local udp bind address failed").err_source(e))?,
         };
-        sock.bind(&local.into())?;
-        sock.connect(&target.into())?;
-        sock.set_nonblocking(true)?;
+        sock.bind(&local.into())
+            .map_err(|e| SinkReason::sink("bind udp socket failed").err_source(e))?;
+        sock.connect(&target.into())
+            .map_err(|e| SinkReason::sink("connect udp socket failed").err_source(e))?;
+        sock.set_nonblocking(true)
+            .map_err(|e| SinkReason::sink("set udp socket nonblocking failed").err_source(e))?;
         let std_sock = std::net::UdpSocket::from(sock);
-        let socket = UdpSocket::from_std(std_sock)?;
+        let socket = UdpSocket::from_std(std_sock)
+            .map_err(|e| SinkReason::sink("adopt udp socket into tokio failed").err_source(e))?;
         let peer = socket.peer_addr().ok().map(|a| a.to_string());
         let local = socket.local_addr().ok().map(|a| a.to_string());
         Ok(Self {
@@ -100,8 +111,10 @@ impl NetWriter {
     }
 
     /// 建立 TCP 连接
-    pub async fn connect_tcp(addr: &str) -> anyhow::Result<Self> {
-        let stream = TcpStream::connect(addr).await?;
+    pub async fn connect_tcp(addr: &str) -> SinkResult<Self> {
+        let stream = TcpStream::connect(addr)
+            .await
+            .map_err(|e| SinkReason::sink("connect tcp socket failed").err_source(e))?;
         // 默认保留 Nagle，以提升小包高 EPS 的吞吐（降低 PPS 与系统调用次数）。
         // 同时尽力扩大发送缓冲区，减小对端拥塞造成的写错误风险。
         let peer = stream.peer_addr().ok().map(|a| a.to_string());
@@ -135,7 +148,7 @@ impl NetWriter {
     pub async fn connect_tcp_with_policy(
         addr: &str,
         policy: NetSendPolicy,
-    ) -> anyhow::Result<Self> {
+    ) -> SinkResult<Self> {
         let mut w = Self::connect_tcp(addr).await?;
         let enable = match policy.backoff_mode {
             BackoffMode::ForceOn => true,
@@ -172,7 +185,7 @@ impl NetWriter {
         match &mut self.transport {
             Transport::Udp(sock) => {
                 sock.send(bytes).await.map_err(|e| {
-                    SinkError::from(SinkReason::Sink(format!("udp send error: {}", e)))
+                    SinkReason::sink("udp send failed").err_source(e)
                 })?;
                 self.sent_cnt = self.sent_cnt.saturating_add(1);
                 Ok(())
@@ -181,10 +194,7 @@ impl NetWriter {
                 if let Err(e) = stream.write_all(bytes).await {
                     // 发送失败时，记录策略与水位的快照，便于定位“发送过快”或对端复位等问题
                     self.log_tcp_send_error(&e, bytes.len());
-                    return Err(SinkError::from(SinkReason::Sink(format!(
-                        "tcp send error: {}",
-                        e
-                    ))));
+                    return Err(SinkReason::sink("tcp send failed").err_source(e));
                 }
                 self.sent_cnt = self.sent_cnt.saturating_add(1);
                 Ok(())
@@ -203,7 +213,7 @@ impl NetWriter {
     pub async fn shutdown(&mut self) -> SinkResult<()> {
         if let Transport::Tcp(stream) = &mut self.transport {
             stream.shutdown().await.map_err(|e| {
-                SinkError::from(SinkReason::Sink(format!("tcp shutdown error: {}", e)))
+                SinkReason::sink("tcp shutdown failed").err_source(e)
             })?;
         }
         Ok(())

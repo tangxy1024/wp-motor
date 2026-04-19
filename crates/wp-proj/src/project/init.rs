@@ -312,7 +312,12 @@ impl WarpProject {
         let abs_root = normalize_work_root(work_root);
         let engine_config_path = abs_root.join(CONF_WPARSE_FILE);
         if !engine_config_path.exists() {
-            return RunReason::from_conf().err_result();
+            return Err(RunReason::from_conf()
+                .to_err()
+                .with_detail(format!(
+                    "engine config not found: {}",
+                    engine_config_path.display()
+                )));
         }
         let conf = EngineConfig::env_load_toml(&engine_config_path, dict)
             .owe_conf()?
@@ -325,7 +330,12 @@ impl WarpProject {
         let abs_root = normalize_work_root(work_root);
         let wpgen_config_path = abs_root.join(CONF_WPGEN_FILE);
         if !wpgen_config_path.exists() {
-            return RunReason::from_conf().err_result();
+            return Err(RunReason::from_conf()
+                .to_err()
+                .with_detail(format!(
+                    "wpgen config not found: {}",
+                    wpgen_config_path.display()
+                )));
         }
         WpGenConfig::env_load_toml(&wpgen_config_path, dict).owe_conf()?;
         Ok(())
@@ -574,6 +584,15 @@ mod tests {
             work_root.join(TOPOLOGY_SINKS_DIR).exists(),
             "topology sinks directory should exist"
         );
+        let miss_sink_conf =
+            std::fs::read_to_string(work_root.join("topology/sinks/infra.d/miss.toml"))
+                .expect("read miss sink config");
+        assert!(miss_sink_conf.contains("connect = \"file_raw_sink\""));
+        assert!(miss_sink_conf.contains("#connect = \"victorialogs_sink\""));
+        let monitor_sink_conf =
+            std::fs::read_to_string(work_root.join("topology/sinks/infra.d/monitor.toml"))
+                .expect("read monitor sink config");
+        assert!(monitor_sink_conf.contains("#connect = \"victoriametrics_sink\""));
         assert!(
             work_root.join(TOPO_SOURCES_DIR).exists(),
             "topology/sources should remain absent; use topology/sources"
@@ -613,6 +632,10 @@ mod tests {
         assert!(
             connector_template_exists(work_root.join(CONNECTORS_SINK_DIR), "file_json_sink"),
             "file sink connector should exist"
+        );
+        assert!(
+            connector_template_exists(work_root.join(CONNECTORS_SINK_DIR), "file_raw_sink"),
+            "file raw sink connector should exist"
         );
         assert!(
             connector_template_exists(work_root.join(CONNECTORS_SINK_DIR), "arrow_file_sink"),

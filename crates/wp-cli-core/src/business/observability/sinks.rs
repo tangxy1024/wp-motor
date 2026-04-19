@@ -5,7 +5,8 @@
 
 use crate::utils::fs::{count_lines_file, is_match, resolve_path};
 use crate::utils::types::{Ctx, GroupAccum, Row, SinkAccum};
-use anyhow::Result;
+use orion_conf::error::{ConfIOReason, OrionConfResult};
+use orion_error::{ErrorWith, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::Path;
 use wp_conf::sinks::{load_business_route_confs, load_infra_route_confs};
@@ -202,20 +203,26 @@ pub fn collect_sink_statistics(
     sink_root: &Path,
     ctx: &Ctx,
     dict: &EnvDict,
-) -> Result<(Vec<Row>, u64)> {
+) -> OrionConfResult<(Vec<Row>, u64)> {
     // Validate that sink directories exist
     if !(sink_root.join("business.d").exists() || sink_root.join("infra.d").exists()) {
-        anyhow::bail!(
-            "缺少 sinks 配置目录：在 '{}' 下未发现 business.d/ 或 infra.d/",
-            sink_root.display()
-        );
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "缺少 sinks 配置目录：在 '{}' 下未发现 business.d/ 或 infra.d/",
+                sink_root.display()
+            ))
+            .with(sink_root));
     }
 
     let mut rows = Vec::new();
     let mut total = 0u64;
 
     // Process business route configurations
-    for conf in load_business_route_confs(sink_root.to_string_lossy().as_ref(), dict)? {
+    for conf in load_business_route_confs(sink_root.to_string_lossy().as_ref(), dict)
+        .with(sink_root)
+        .want("load business sink routes")?
+    {
         let g = conf.sink_group;
         if !is_match(g.name().as_str(), &ctx.group_filters) {
             continue;
@@ -232,7 +239,10 @@ pub fn collect_sink_statistics(
     }
 
     // Process infra route configurations
-    for conf in load_infra_route_confs(sink_root.to_string_lossy().as_ref(), dict)? {
+    for conf in load_infra_route_confs(sink_root.to_string_lossy().as_ref(), dict)
+        .with(sink_root)
+        .want("load infra sink routes")?
+    {
         let g = conf.sink_group;
         if !is_match(g.name().as_str(), &ctx.group_filters) {
             continue;
@@ -249,4 +259,54 @@ pub fn collect_sink_statistics(
     }
 
     Ok((rows, total))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wp_conf::test_support::ForTest;
+
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn tmp_dir(prefix: &str) -> std::path::PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let mut p = std::env::temp_dir();
+        p.push(format!("{}_{}", prefix, nanos));
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn collect_sink_statistics_reports_missing_sink_dirs_as_struct_error() {
+        let root = tmp_dir("wpcore_sink_stat_missing");
+        let sink_root = root.join("sink");
+        fs::create_dir_all(&sink_root).unwrap();
+
+        let ctx = Ctx::new(root.to_string_lossy().to_string());
+        let err = match collect_sink_statistics(&sink_root, &ctx, &EnvDict::test_default()) {
+            Ok(_) => panic!("missing sink dirs should fail"),
+            Err(err) => err,
+        };
+
+        let detail = err.detail().clone().unwrap_or_default();
+        let chain = err.display_chain();
+        assert!(
+            detail.contains("缺少 sinks 配置目录") || chain.contains("缺少 sinks 配置目录"),
+            "detail={detail}, chain={chain}"
+        );
+        assert!(
+            chain.contains(sink_root.to_string_lossy().as_ref())
+                || err
+                    .source_frames()
+                    .iter()
+                    .filter_map(|frame| frame.path.as_deref())
+                    .any(|path| path.contains("/sink")),
+            "target={:?}, chain={chain}",
+            err.target_path()
+        );
+    }
 }

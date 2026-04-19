@@ -61,7 +61,14 @@ impl Connectors {
             println!("✓ Connectors validation passed");
             Ok(CheckStatus::Suc)
         } else {
-            Err(RunReason::from_conf().to_err())
+            let summary = errors
+                .into_iter()
+                .take(3)
+                .collect::<Vec<_>>()
+                .join("; ");
+            Err(RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("connectors validation failed: {}", summary)))
         }
     }
 

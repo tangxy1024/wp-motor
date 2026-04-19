@@ -117,7 +117,9 @@ impl Wpl {
                     for fp in wpl_files {
                         let raw = std::fs::read_to_string(&fp).unwrap_or_default();
                         if raw.trim().is_empty() {
-                            return Err(RunReason::from_conf().to_err());
+                            return Err(RunReason::from_conf()
+                                .to_err()
+                                .with_detail(format!("wpl file is empty: {}", fp.display())));
                         }
                         let code = WplCode::build(fp.clone(), raw.as_str())
                             .owe_conf()
@@ -142,7 +144,9 @@ impl Wpl {
         for fp in rules {
             let raw = std::fs::read_to_string(&fp).unwrap_or_default();
             if raw.trim().is_empty() {
-                return Err(RunReason::from_conf().to_err());
+                return Err(RunReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("wpl file is empty: {}", fp.display())));
             }
             let code = WplCode::build(fp.clone(), raw.as_str())
                 .owe_rule()

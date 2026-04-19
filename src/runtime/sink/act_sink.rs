@@ -585,7 +585,7 @@ impl ActSink {
         &mut self,
         mut sink_rt: SinkRuntime,
         mut dat_r: SinkDatAReceiver,
-    ) -> anyhow::Result<()> {
+    ) -> wp_connector_api::SinkResult<()> {
         info_data!("async sinks proc start");
         let mut run_ctrl = TaskController::new("sink", self.cmd_r.clone(), None);
 

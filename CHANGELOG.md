@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.4 Unreleased]
+
+### Added
+- **Error Handling/Docs**: Add structured error-system design and review checklist documentation
+- **wp-proj/Templates**: Add commented VictoriaLogs/VictoriaMetrics infra sink examples to generated route templates
+
+### Changed
+- **Error Handling**: Improve shared CLI diagnostics and preserve upstream source chains across config, source, sink, generator, recovery, monitor, and project-management boundaries
+- **Config Loading**: Align source/sink/wpgen loading and validation with the unified loader contract, including env evaluation, path context, and structured validation details
+- **Observability**: Return structured item-level diagnostics for source/sink stats and validation failures such as invalid connectors, disallowed overrides, unreadable files, and line-count errors
+
+### Fixed
+- **CLI/Error Output**: Fix terse `wpgen`, `wproj`, and `wprescue` configuration errors so they include actionable detail and source-chain context
+- **Runtime**: Surface recovery checkpoint and monitor sink failures as structured errors instead of flattening or only logging them
+- **Tests**: Update config, observability, source-stat, and knowledge tests to assert stable diagnostic semantics
+
+## [1.20.3] - 2026-04-16
+
+### Fixed
+- **Runtime/Stats**: Fix backpressure caused by excessive statistical slicing
+
 ## [1.20.2] - 2026-04-16
 
 ### Changed

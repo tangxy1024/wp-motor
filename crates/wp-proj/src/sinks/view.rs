@@ -192,7 +192,11 @@ pub async fn collect_oml_models(work_root: &str, dict: &EnvDict) -> RunResult<Ve
     let oml_root = ConfigPathResolver::resolve_model_path(work_root, "oml", dict)?;
     let root_str = oml_root
         .to_str()
-        .ok_or_else(|| RunReason::from_conf().to_err())?;
+        .ok_or_else(|| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail("oml root path is not valid UTF-8")
+        })?;
     let files = find_conf_files(root_str, WPARSE_OML_FILE)
         .owe_conf()
         .with(root_str)

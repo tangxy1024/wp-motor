@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use crate::core::sinks::sync_sink::RecSyncSink;
 use crate::runtime::actor::constants::ACTOR_IDLE_TICK_MS;
-use crate::types::AnyResult;
 use tokio::time::{MissedTickBehavior, interval, sleep};
 
+use orion_error::ErrorOwe;
 use wp_stat::ReportVariant;
 use wp_stat::StatReq;
 
@@ -19,6 +19,7 @@ use crate::stat::runtime_counters;
 use crate::stat::runtime_metric::RuntimeMetrics;
 use crate::stat::{MonRecv, MonSend};
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
+use wp_error::run_error::RunResult;
 use wp_log::info_ctrl;
 use wp_stat::StatStage;
 
@@ -58,7 +59,7 @@ impl ActorMonitor {
         self.mon_s.clone()
     }
 
-    pub async fn stat_proc(&mut self, reqs: Vec<StatReq>) -> AnyResult<()> {
+    pub async fn stat_proc(&mut self, reqs: Vec<StatReq>) -> RunResult<()> {
         info_ctrl!(
             "monitor proc start: stat_sec={}, stat_print={}",
             self.stat_sec,
@@ -154,9 +155,7 @@ impl ActorMonitor {
                             .into_iter()
                             .map(|tdc| SinkRecUnit::new(0, ProcMeta::Null, tdc.into()))
                             .collect();
-                        if let Err(e) = sink.send_to_sink_batch(units) {
-                            error_data!("sink error:{}", e);
-                        }
+                        sink.send_to_sink_batch(units).owe_res()?;
                     }
                     }
                     wparse_stat.sum_up();

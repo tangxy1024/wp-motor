@@ -30,6 +30,7 @@
 //! # fn some_config_function() -> Result<(), orion_error::StructError<orion_conf::error::ConfIOReason>> { Ok(()) }
 //! ```
 use orion_error::{ToStructError, UvsFrom};
+use std::error::Error as StdError;
 use wp_error::run_error::{RunReason, RunResult};
 
 /// Result 扩展 trait，提供统一的错误转换接口
@@ -67,9 +68,18 @@ pub trait ResultExt<T, E> {
     fn to_run_err_with<F>(self, f: F) -> RunResult<T>
     where
         F: FnOnce(&E) -> String;
+
+    fn to_run_err_source(self, context: &str) -> RunResult<T>
+    where
+        E: StdError + Send + Sync + 'static;
+
+    fn to_run_err_with_source<F>(self, f: F) -> RunResult<T>
+    where
+        E: StdError + Send + Sync + 'static,
+        F: FnOnce(&E) -> String;
 }
 
-/// 为所有 Result<T, E> 实现 ResultExt，其中 E 实现了 Display
+/// 为所有 Result<T, E> 实现 ResultExt。
 impl<T, E: std::fmt::Display> ResultExt<T, E> for Result<T, E> {
     fn to_run_err(self, context: &str) -> RunResult<T> {
         match self {
@@ -88,6 +98,33 @@ impl<T, E: std::fmt::Display> ResultExt<T, E> for Result<T, E> {
             Ok(v) => Ok(v),
             Err(e) => Err(RunReason::from_conf().to_err().with_detail(f(&e))),
         }
+    }
+
+    fn to_run_err_source(self, context: &str) -> RunResult<T>
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        self.map_err(|e| {
+            let detail = format!("{}: {}", context, e);
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(detail)
+                .with_source(e)
+        })
+    }
+
+    fn to_run_err_with_source<F>(self, f: F) -> RunResult<T>
+    where
+        E: StdError + Send + Sync + 'static,
+        F: FnOnce(&E) -> String,
+    {
+        self.map_err(|e| {
+            let detail = f(&e);
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(detail)
+                .with_source(e)
+        })
     }
 }
 

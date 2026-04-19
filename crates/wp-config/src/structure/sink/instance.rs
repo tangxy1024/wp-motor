@@ -6,7 +6,7 @@ use crate::{cond::WarpConditionParser, structure::Validate};
 use derive_getters::Getters;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{ErrorOwe, ErrorWith, ToStructError};
-use orion_error::{ContextRecord, OperationContext, UvsFrom};
+use orion_error::{ContextRecord, ErrorOweSource, OperationContext, UvsFrom};
 use orion_variate::EnvEvaluable;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -248,9 +248,11 @@ impl Validate for SinkInstanceConf {
         }
         if let Some(path) = &self.core.filter {
             if Path::new(path).exists() {
-                if let Ok(content) = std::fs::read_to_string(path)
-                    && !content.trim().is_empty()
-                {
+                let content = std::fs::read_to_string(path)
+                    .owe_conf_source()
+                    .want("read filter file")
+                    .with(path.as_str())?;
+                if !content.trim().is_empty() {
                     let mut data = content.as_str();
                     WarpConditionParser::exp(&mut data)
                         .owe_conf()

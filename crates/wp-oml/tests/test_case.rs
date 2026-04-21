@@ -843,6 +843,68 @@ async fn test_sql_group_concat_in_with_oml_refs() -> AnyResult<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn test_sql_group_concat_in_with_take_refs() -> AnyResult<()> {
+    let cache = &mut FieldQueryCache::default();
+    let db = MemDB::global();
+    db.table_create("CREATE TABLE IF NOT EXISTS asset_data (ip TEXT, asset TEXT)")?;
+    db.execute("DELETE FROM asset_data")?;
+    db.execute("INSERT INTO asset_data (ip, asset) VALUES ('1.1.1.1', 'server')")?;
+    db.execute("INSERT INTO asset_data (ip, asset) VALUES ('2.2.2.2', 'db')")?;
+    db.execute("INSERT INTO asset_data (ip, asset) VALUES ('2.2.2.2', 'server')")?;
+    let _ = wp_knowledge::facade::init_mem_provider(db);
+
+    let mut conf = r#"
+        name : test
+        ---
+        asset_list = select group_concat(distinct asset) from asset_data where ip in (take(src_ip), take(dst_ip)) ;
+        "#;
+    let model = oml_parse_raw(&mut conf).await.assert();
+    let src = DataRecord::from(vec![
+        DataField::from_chars("src_ip", "1.1.1.1"),
+        DataField::from_chars("dst_ip", "2.2.2.2"),
+    ]);
+
+    let target = model.transform_async(src, cache).await;
+    let result = target
+        .get2("asset_list")
+        .expect("asset_list field")
+        .to_string();
+
+    assert!(result.contains("server"), "result={result}");
+    assert!(result.contains("db"), "result={result}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_sql_eq_with_bare_temp_ref() -> AnyResult<()> {
+    let cache = &mut FieldQueryCache::default();
+    let db = MemDB::global();
+    db.table_create("CREATE TABLE IF NOT EXISTS asset_data (ip TEXT, asset TEXT)")?;
+    db.execute("DELETE FROM asset_data")?;
+    db.execute("INSERT INTO asset_data (ip, asset) VALUES ('1.1.1.1', 'server')")?;
+    db.execute("INSERT INTO asset_data (ip, asset) VALUES ('2.2.2.2', 'db')")?;
+    let _ = wp_knowledge::facade::init_mem_provider(db);
+
+    let mut conf = r#"
+        name : test
+        ---
+        __tsip = read(src_ip) ;
+        asset_name = select asset from asset_data where ip = __tsip ;
+        "#;
+    let model = oml_parse_raw(&mut conf).await.assert();
+    let src = DataRecord::from(vec![DataField::from_chars("src_ip", "1.1.1.1")]);
+
+    let target = model.transform_async(src, cache).await;
+    let result = target
+        .get2("asset_name")
+        .expect("asset_name field")
+        .to_string();
+
+    assert_eq!(result, "chars(server)");
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn test_value_arr1() {
     let cache = &mut FieldQueryCache::default();
 

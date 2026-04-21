@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.1] - 2026-04-21
+
+### Fixed
+- **OML/Take**: 修复 `take(...)` 在目标记录与源记录同时存在同名字段时的移动顺序，优先消费当前目标记录中的已生成字段，避免前序 OML 字段被源记录同名值错误覆盖。
+- **OML/SQL Parser**: 修复 SQL 参数提取对 `take(field)` 与 `__temp_var` 的识别，支持它们在 `=` 与 `IN (...)` 条件中稳定转换为绑定参数。
+- **OML/SQL Parser**: 扩展严格 SQL 模式下的聚合函数校验，支持 `string_agg(distinct field, ',')` 这类合法表达式。
+
+## [1.21.0] - 2026-04-20
+
+### Changed
+- **Dependencies**: 升级工作区依赖，包含 `jieba-rs 0.9`、`lru 0.17`、`ctor 0.10` 等版本更新。
+- **Release Workflow**: 升级 GitHub Release Action 到 `softprops/action-gh-release@v3`。
+
+### Fixed
+- **OML/Take**: 修复 `take(...)` 只能从源记录取值的问题，现支持消费当前目标记录中已生成的字段，使前序 OML 字段可以被后续 `take(...)` 正确移动复用。
+- **OML/SQL Parser**: 修复严格 SQL 模式下对 `group_concat(distinct ...)` 这类聚合表达式的校验与解析，并支持 `IN (@sip, @dip)`、`in(@sip, @dip)` 这类引用参数写法。
+
 ## [1.20.0] - 2026-04-11
 
 ### Added

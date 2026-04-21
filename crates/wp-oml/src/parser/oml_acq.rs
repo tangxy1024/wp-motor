@@ -60,6 +60,12 @@ pub fn oml_cond_acq(data: &mut &str) -> ModalResult<CondAccessor> {
         let _ = oml_sql_fn.parse_next(data)?;
         return Ok(acc.1);
     }
+    if let Ok((_, name)) = take_var_name.parse_peek(data)
+        && name.starts_with("__")
+    {
+        let name = take_var_name.parse_next(data)?;
+        return Ok(CondAccessor::from_read(name.to_string()));
+    }
     if let Ok((_, PreciseEvaluator::Tdc(x))) = oml_aga_tdc.parse_peek(data) {
         let _ = oml_aga_tdc.parse_next(data)?;
         return Ok(CondAccessor::Tdc(x));
@@ -100,6 +106,13 @@ fn oml_sql_fn(data: &mut &str) -> ModalResult<CondAccessor> {
         if let Ok((_, PreciseEvaluator::Tdc(o))) = oml_aga_tdc.parse_peek(data) {
             let _ = oml_aga_tdc.parse_next(data)?;
             args.push(SqlFnArg::Param(Box::new(CondAccessor::Tdc(o))));
+        } else if let Ok((_, name)) = take_var_name.parse_peek(data)
+            && name.starts_with("__")
+        {
+            let name = take_var_name.parse_next(data)?;
+            args.push(SqlFnArg::Param(Box::new(CondAccessor::from_read(
+                name.to_string(),
+            ))));
         } else if let Ok((_, PreciseEvaluator::Val(v))) = oml_sql_raw.parse_peek(data) {
             let _ = oml_sql_raw.parse_next(data)?;
             args.push(SqlFnArg::Literal(v));

@@ -13,7 +13,10 @@ use wp_primitives::Parser;
 use wp_primitives::WResult;
 use wp_primitives::symbol::ctx_desc;
 
-use crate::language::{ArgsTakeAble, CondAccessor, PreciseEvaluator, SqlQuery};
+use crate::language::{
+    ArgsTakeAble, CondAccessor, DirectAccessor, FieldTake, PreciseEvaluator, RecordOperation,
+    SqlQuery,
+};
 use crate::parser::keyword::{kw_sql_select, kw_sql_where};
 
 use super::cond::SCondParser;
@@ -260,6 +263,27 @@ fn to_sql_piece(s: &str, params: &mut HashMap<String, CondAccessor>) -> String {
         let var = rest2.trim();
         params.insert(var.to_string(), CondAccessor::from_read(var.to_string()));
         return format!(":{}", var);
+    }
+    if st.starts_with("__") && is_sql_ident(st) {
+        params.insert(st.to_string(), CondAccessor::from_read(st.to_string()));
+        return format!(":{}", st);
+    }
+    if let Some(rest) = st.strip_prefix("take(")
+        && let Some(rest2) = rest.strip_suffix(")")
+    {
+        let var = rest2.trim();
+        if is_sql_ident(var) {
+            params.insert(
+                var.to_string(),
+                CondAccessor::Tdc(RecordOperation::new(DirectAccessor::Take(FieldTake {
+                    get: Some(var.to_string()),
+                    option: Vec::new(),
+                    collect: Vec::new(),
+                    default_acq: None,
+                }))),
+            );
+            return format!(":{}", var);
+        }
     }
     st.to_string()
 }
@@ -529,6 +553,59 @@ mod tests {
         );
         assert!(parsed.vars().contains_key("sip"));
         assert!(parsed.vars().contains_key("dip"));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_oml_sql_group_concat_in_take_refs() -> ModalResult<()> {
+        super::set_sql_strict_for_test(Some(true));
+        let mut code = r#" select group_concat(distinct asset_type) from asset_enrichment where ip in (take(src_ip), take(dst_ip)) ;"#;
+        let parsed = oml_sql.parse_next(&mut code)?;
+        assert_eq!(
+            parsed
+                .oml_sql()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
+            "select group_concat(distinct asset_type) from asset_enrichment where ip IN (:src_ip, :dst_ip)"
+        );
+        assert!(parsed.vars().contains_key("src_ip"));
+        assert!(parsed.vars().contains_key("dst_ip"));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_oml_sql_bare_temp_var_eq_ref() -> ModalResult<()> {
+        super::set_sql_strict_for_test(Some(true));
+        let mut code = r#" select asset from asset_data where ip = __tsip ;"#;
+        let parsed = oml_sql.parse_next(&mut code)?;
+        assert_eq!(
+            parsed
+                .oml_sql()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
+            "select asset from asset_data where ip = :ip"
+        );
+        assert!(parsed.vars().contains_key("ip"));
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_oml_sql_group_concat_in_bare_temp_refs() -> ModalResult<()> {
+        super::set_sql_strict_for_test(Some(true));
+        let mut code = r#" select group_concat(distinct asset_type) from asset_enrichment where ip in (__sip, __dip) ;"#;
+        let parsed = oml_sql.parse_next(&mut code)?;
+        assert_eq!(
+            parsed
+                .oml_sql()
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
+            "select group_concat(distinct asset_type) from asset_enrichment where ip IN (:__sip, :__dip)"
+        );
+        assert!(parsed.vars().contains_key("__sip"));
+        assert!(parsed.vars().contains_key("__dip"));
         Ok(())
     }
 

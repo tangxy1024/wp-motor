@@ -3003,9 +3003,9 @@ dependencies = [
 
 [[package]]
 name = "orion-error"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b99ac4824671056dc14e4100292e28d7f4921c65be54d1bb99048d770a4552a2"
+checksum = "6719d23a898c158da039ec98dd111f209dd1d578290a1ef219b3e70b8a5f3861"
 dependencies = [
  "derive_more",
  "log",
@@ -3082,7 +3082,7 @@ dependencies = [
 
 [[package]]
 name = "orion_exp"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "arcstr",
  "chrono",
@@ -3095,7 +3095,7 @@ dependencies = [
 
 [[package]]
 name = "orion_overload"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "derive-getters",
@@ -4985,9 +4985,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "winnow"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09dac053f1cd375980747450bfc7250c264eaae0583872e845c0c7cd578872b5"
+checksum = "2ee1708bef14716a11bae175f579062d4554d95be2c6829f518df847b7b3fdd0"
 dependencies = [
  "memchr",
 ]
@@ -5099,7 +5099,7 @@ dependencies = [
 
 [[package]]
 name = "wp-cli-core"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5119,7 +5119,7 @@ dependencies = [
 
 [[package]]
 name = "wp-condition"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "orion_exp",
  "winnow",
@@ -5143,7 +5143,7 @@ dependencies = [
 
 [[package]]
 name = "wp-config"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5260,7 +5260,7 @@ dependencies = [
 
 [[package]]
 name = "wp-data-utils"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "arbitrary",
@@ -5281,7 +5281,7 @@ dependencies = [
 
 [[package]]
 name = "wp-engine"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -5375,9 +5375,9 @@ dependencies = [
 
 [[package]]
 name = "wp-error"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac8d61efa70058ac80e06de09782e04ff4245f4135fb7231ca09b64a22c9a8b9"
+checksum = "96619c8b1bf018e7cca7e492e594996ff2fcb0be3b18e6a78b6b51dff7259230"
 dependencies = [
  "derive_more",
  "orion-error",
@@ -5509,7 +5509,7 @@ dependencies = [
 
 [[package]]
 name = "wp-oml"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -5595,7 +5595,7 @@ dependencies = [
 
 [[package]]
 name = "wp-proj"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "comfy-table",
@@ -5635,7 +5635,7 @@ dependencies = [
 
 [[package]]
 name = "wp-stats"
-version = "1.21.1"
+version = "1.21.2"
 dependencies = [
  "anyhow",
  "chrono",

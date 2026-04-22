@@ -1,7 +1,8 @@
 use std::path::Path;
 
+use orion_error::{ToStructError, UvsFrom, WrapStructError};
 use orion_variate::EnvDict;
-use wp_error::RunResult;
+use wp_error::{RunReason, RunResult};
 
 use crate::wpgen::core::clean_wpgen_output_file;
 
@@ -41,8 +42,9 @@ impl WpGenManager {
                         println!("✓ Cleaned wpgen data from: {}", path);
                         Ok(true)
                     } else if result.existed {
-                        eprintln!("Warning: Failed to clean wpgen data from: {}", path);
-                        Ok(false)
+                        Err(RunReason::from_conf()
+                            .to_err()
+                            .with_detail(format!("清理 wpgen 数据失败: {}", path)))
                     } else {
                         println!("✓ No wpgen data to clean at: {}", path);
                         Ok(false)
@@ -55,10 +57,9 @@ impl WpGenManager {
                     Ok(false)
                 }
             }
-            Err(e) => {
-                eprintln!("Warning: Failed to clean wpgen data: {}", e);
-                Ok(false)
-            }
+            Err(e) => Err(e
+                .wrap(RunReason::from_conf())
+                .with_detail("清理 wpgen 数据失败")),
         }
     }
 
@@ -76,7 +77,8 @@ impl WpGenManager {
 #[cfg(test)]
 mod tests {
     use orion_error::TestAssertWithMsg;
-    use wp_conf::test_support::{ForTest, TestCasePath};
+    use tempfile::tempdir;
+    use wp_conf::test_support::ForTest;
 
     use super::*;
     use crate::project::{WarpProject, init::PrjScope};
@@ -100,7 +102,7 @@ mod tests {
 
     #[test]
     fn clean_outputs_remove_file_sink_outputs() {
-        let case_path = TestCasePath::new("wgpen", "clean1").assert("test path");
+        let case_path = tempdir().expect("test path");
         let mut project = WarpProject::bare(case_path.path());
         project
             .init_basic(PrjScope::Full)
@@ -132,5 +134,37 @@ mod tests {
         assert!(cleaned, "expected wpgen data clean to report work done");
         assert!(!shard0.exists(), "wpgen shard 0 should be removed");
         assert!(!shard1.exists(), "wpgen shard 1 should be removed");
+    }
+
+    #[test]
+    fn clean_outputs_reports_delete_failures() {
+        let case_path = tempdir().expect("test path");
+        let mut project = WarpProject::bare(case_path.path());
+        project
+            .init_basic(PrjScope::Full)
+            .assert("init project with connectors");
+
+        let wpgen_conf = case_path.path().join("conf/wpgen.toml");
+        if !wpgen_conf.exists() {
+            gen_conf_init(case_path.path()).expect("init wpgen config");
+        }
+
+        let god = WarpConf::new(case_path.path());
+        let resolved = load_wpgen_resolved("wpgen.toml", &god, &EnvDict::test_default())
+            .expect("resolve wpgen output");
+        let output_file = case_path
+            .path()
+            .join(resolved.out_sink.resolve_file_path().expect("output path"));
+        std::fs::create_dir_all(&output_file).expect("create blocking dir");
+
+        let manager = WpGenManager::new(case_path.path());
+        let err = manager
+            .clean_outputs(&EnvDict::test_default())
+            .expect_err("directory at output path should fail remove_file");
+        let detail = err.detail().clone().unwrap_or_default();
+        let chain = err.display_chain();
+        assert!(detail.contains("清理 wpgen 数据失败"));
+        assert!(chain.contains("remove wpgen output"));
+        assert!(chain.contains(output_file.to_string_lossy().as_ref()));
     }
 }

@@ -4,6 +4,7 @@
 //! over TCP protocol with connection management, automatic framing, and message distribution.
 
 use crate::sources::event_id::next_event_id;
+use orion_error::ToStructError;
 use std::sync::Arc;
 
 use bytes::BytesMut;
@@ -357,10 +358,9 @@ impl TcpSyslogSource {
         let client_ip = Arc::<str>::from(client_ip);
         while let Some(pending) = framing::drain_auto_all(buffer, &client_ip, sender).await? {
             sender.send(pending).await.map_err(|e| {
-                SourceError::from(SourceReason::Disconnect(format!(
-                    "syslog framing channel closed: {}",
-                    e
-                )))
+                SourceReason::Disconnect("syslog framing channel closed".to_string())
+                    .to_err()
+                    .with_source(e)
             })?;
         }
         Ok(())

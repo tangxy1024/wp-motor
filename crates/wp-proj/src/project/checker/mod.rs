@@ -12,11 +12,11 @@ use std::path::PathBuf;
 use super::warp::WarpProject;
 use crate::types::CheckStatus;
 use orion_conf::UvsFrom;
-use orion_error::ToStructError;
+use orion_error::{DomainReason, ErrorCode, StructError, ToStructError};
 use orion_variate::EnvDict;
 use wp_cli_core::business::connectors::{sinks as sink_connectors, sources as source_connectors};
 use wp_engine::facade::config::{self as cfg_face, ENGINE_CONF_FILE};
-use wp_error::run_error::RunResult;
+use wp_error::run_error::{RunError, RunResult};
 
 /// 检查工程（与 `wproj prj check` 语义一致）。
 /// 执行全面的项目检查，包括所有组件。
@@ -33,7 +33,13 @@ pub fn check_with(
     render_output(&rows, &stats, opts, comps);
 
     if has_failures(&rows, comps) {
-        return Err(wp_error::run_error::RunReason::from_conf().to_err());
+        let failed_targets = rows.iter().filter(|row| row.count_failures() > 0).count();
+        return Err(wp_error::run_error::RunReason::from_conf()
+            .to_err()
+            .with_detail(format!(
+                "project check failed: {} target(s) reported validation errors",
+                failed_targets
+            )));
     }
     Ok(())
 }
@@ -99,7 +105,7 @@ fn evaluate_target(
                 row.conf_detail = Some(cm.config_path_string(ENGINE_CONF_FILE));
                 Cell::success()
             }
-            Err(e) => Cell::failure(e.to_string()),
+            Err(e) => Cell::failure(describe_run_error(&e)),
         };
         if !row.conf.ok && opts.fail_fast {
             return row;
@@ -112,7 +118,7 @@ fn evaluate_target(
         let sources_check = project
             .sources_c()
             .check(dict)
-            .map_err(|e| e.reason().to_string())
+            .map_err(|e| describe_run_error(&e))
             .map(|_| ());
         let check_cell = Cell::from_result(sources_check);
         // Use the unified check() for both syntax and runtime validation
@@ -135,7 +141,7 @@ fn evaluate_target(
                 .connectors()
                 .check(wrs, dict)
                 .map(|_| ())
-                .map_err(|e| e.reason().to_string()),
+                .map_err(|e| describe_run_error(&e)),
         );
         match collect_connector_counts(wrs, dict) {
             Ok(stats) => row.connector_counts = Some(stats),
@@ -156,7 +162,7 @@ fn evaluate_target(
             project
                 .sinks_c()
                 .check(dict)
-                .map_err(|e| e.reason().to_string())
+                .map_err(|e| describe_run_error(&e))
                 .map(|_| ()),
         );
         if !row.sinks.ok && opts.fail_fast {
@@ -171,7 +177,7 @@ fn evaluate_target(
             project
                 .wpl()
                 .check(dict)
-                .map_err(|e| e.reason().to_string())
+                .map_err(|e| describe_run_error(&e))
                 .map(|_| ()),
         );
         if !row.wpl.ok && opts.fail_fast {
@@ -188,7 +194,7 @@ fn evaluate_target(
                 CheckStatus::Miss => Cell::success_with_message("OML 文件缺失".to_string()),
                 CheckStatus::Error => Cell::failure("OML 检查错误".to_string()),
             },
-            Err(e) => Cell::failure(e.reason().to_string()),
+            Err(e) => Cell::failure(describe_run_error(&e)),
         };
         if !row.oml.ok && opts.fail_fast {
             return row;
@@ -216,7 +222,7 @@ fn evaluate_target(
 /// 检查语义词典配置
 fn check_semantic_dict_config(work_root: &Path, dict: &EnvDict) -> Result<Option<String>, String> {
     let (_, main_conf) = cfg_face::load_warp_engine_confs(&work_root.to_string_lossy(), dict)
-        .map_err(|e| e.reason().to_string())?;
+        .map_err(|e| describe_run_error(&e))?;
 
     let primary = PathBuf::from(main_conf.knowledge_root()).join("semantic_dict.toml");
     if primary.exists() {
@@ -246,6 +252,49 @@ fn shorten_semantic_dict_message(msg: &str, work_root: &Path, config_path: &Path
         .strip_prefix("语义词典配置有效: ")
         .unwrap_or(&replaced)
         .to_string()
+}
+
+fn describe_run_error(err: &RunError) -> String {
+    describe_struct_error(err)
+}
+
+fn describe_struct_error<R>(err: &StructError<R>) -> String
+where
+    R: DomainReason + ErrorCode + std::fmt::Debug + std::fmt::Display + Send + Sync + 'static,
+{
+    if let Some(detail) = err
+        .detail()
+        .as_ref()
+        .map(|d| d.trim())
+        .filter(|d| !d.is_empty())
+    {
+        return detail.to_string();
+    }
+
+    for frame in err.source_frames() {
+        if let Some(detail) = frame
+            .detail
+            .as_deref()
+            .map(str::trim)
+            .filter(|d| !d.is_empty())
+        {
+            return detail.to_string();
+        }
+        if let Some(path) = frame
+            .path
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
+            return format!("{} ({})", frame.message, path);
+        }
+    }
+
+    if let Some(path) = err.target_path().filter(|p| !p.trim().is_empty()) {
+        return format!("{} ({})", err.reason(), path);
+    }
+
+    err.display_chain()
 }
 
 #[derive(Default, Clone, Copy)]
@@ -456,14 +505,14 @@ pub fn check_with_default(
 
 fn collect_connector_counts(work_root: &str, dict: &EnvDict) -> Result<ConnectorCounts, String> {
     let (_cm, main) =
-        cfg_face::load_warp_engine_confs(work_root, dict).map_err(|e| e.to_string())?;
-    let src_rows =
-        source_connectors::list_connectors(work_root, &main, dict).map_err(|e| e.to_string())?;
+        cfg_face::load_warp_engine_confs(work_root, dict).map_err(|e| describe_run_error(&e))?;
+    let src_rows = source_connectors::list_connectors(work_root, &main, dict)
+        .map_err(|e| describe_struct_error(&e))?;
     let src_defs = src_rows.len();
     let src_refs: usize = src_rows.iter().map(|row| row.refs).sum();
 
-    let (sink_map, sink_usage) =
-        sink_connectors::list_connectors_usage(work_root, dict).map_err(|e| e.to_string())?;
+    let (sink_map, sink_usage) = sink_connectors::list_connectors_usage(work_root, dict)
+        .map_err(|e| describe_struct_error(&e))?;
     let sink_defs = sink_map.len();
     let sink_routes = sink_usage.len();
 
@@ -477,8 +526,10 @@ fn collect_connector_counts(work_root: &str, dict: &EnvDict) -> Result<Connector
 
 #[cfg(test)]
 mod tests {
-    use super::shorten_semantic_dict_message;
+    use super::{describe_run_error, shorten_semantic_dict_message};
+    use orion_error::{ToStructError, UvsFrom};
     use std::path::Path;
+    use wp_error::run_error::RunReason;
 
     #[test]
     fn semantic_dict_message_is_shortened_for_table_output() {
@@ -494,5 +545,25 @@ mod tests {
             short,
             "./models/knowledge/semantic_dict.toml | 模式: ADD（扩展内置词典） | 词汇数: 0"
         );
+    }
+
+    #[test]
+    fn describe_run_error_prefers_detail_over_generic_reason() {
+        let err = RunReason::from_conf()
+            .to_err()
+            .with_detail("override 'endpoint' not allowed");
+
+        assert_eq!(describe_run_error(&err), "override 'endpoint' not allowed");
+    }
+
+    #[test]
+    fn describe_run_error_uses_target_path_when_detail_missing() {
+        let err = RunReason::from_conf()
+            .to_err()
+            .with_source(std::io::Error::other("/tmp/demo/wparse.toml"));
+
+        let msg = describe_run_error(&err);
+        assert!(msg.contains("configuration error << core config"));
+        assert!(msg.contains("/tmp/demo/wparse.toml"));
     }
 }

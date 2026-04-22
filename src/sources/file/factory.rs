@@ -2,7 +2,7 @@ use super::source::{FileEncoding, FileSource, MultiFileSource, compute_file_rang
 use async_trait::async_trait;
 use glob::glob;
 use orion_conf::{ErrorWith, UvsFrom};
-use orion_error::ErrorOweBase;
+use orion_error::{ErrorOweBase, ToStructError};
 use std::path::Path;
 use wp_conf::connectors::ConnectorDef;
 use wp_conf_base::ConfParser;
@@ -23,11 +23,11 @@ struct FileSourceSpec {
 }
 
 impl FileSourceSpec {
-    fn from_resolved(resolved: &ResolvedSourceSpec) -> anyhow::Result<Self> {
+    fn from_resolved(resolved: &ResolvedSourceSpec) -> SourceResult<Self> {
         if resolved.params.contains_key("path") {
-            anyhow::bail!(
-                "'path' is not supported for file source; use 'file' (with optional wildcard) and optional 'base'"
-            );
+            return Err(SourceReason::from_conf().to_err().with_detail(
+                "'path' is not supported for file source; use 'file' (with optional wildcard) and optional 'base'",
+            ));
         }
         let base = resolved
             .params
@@ -36,24 +36,29 @@ impl FileSourceSpec {
             .unwrap_or("./data/in_dat")
             .to_string();
         if has_glob_pattern(&base) {
-            anyhow::bail!("'base' does not support wildcard patterns for file source");
+            return Err(SourceReason::from_conf()
+                .to_err()
+                .with_detail("'base' does not support wildcard patterns for file source"));
         }
         let file = resolved
             .params
             .get("file")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow::anyhow!("Missing required 'file' for file source"))?
+            .ok_or_else(|| {
+                SourceReason::from_conf()
+                    .to_err()
+                    .with_detail("Missing required 'file' for file source")
+            })?
             .to_string();
         let encoding = match resolved.params.get("encode").and_then(|v| v.as_str()) {
             None | Some("text") => FileEncoding::Text,
             Some("base64") => FileEncoding::Base64,
             Some("hex") => FileEncoding::Hex,
             Some(v) => {
-                anyhow::bail!(
+                return Err(SourceReason::from_conf().to_err().with_detail(format!(
                     "Invalid encode value for file source '{}': {}",
-                    resolved.name,
-                    v
-                );
+                    resolved.name, v
+                )));
             }
         };
         let instances = resolved
@@ -74,15 +79,23 @@ impl FileSourceSpec {
         Path::new(&self.base).join(&self.file).display().to_string()
     }
 
-    fn expand_paths(&self) -> anyhow::Result<Vec<String>> {
+    fn expand_paths(&self) -> SourceResult<Vec<String>> {
         if !has_glob_pattern(&self.file) {
             return Ok(vec![self.resolved_path()]);
         }
 
         let pattern = Path::new(&self.base).join(&self.file).display().to_string();
         let mut matches = Vec::new();
-        for entry in glob(&pattern)? {
-            let path = entry?;
+        for entry in glob(&pattern).map_err(|e| {
+            SourceReason::from_conf()
+                .to_err()
+                .with_detail(format!("invalid glob pattern '{}': {}", pattern, e))
+        })? {
+            let path = entry.map_err(|e| {
+                SourceReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("iterate glob match '{}': {}", pattern, e))
+            })?;
             if path.is_file() {
                 matches.push(path);
             }
@@ -90,7 +103,9 @@ impl FileSourceSpec {
         matches.sort_by(|left, right| compare_paths_by_file_name(left, right));
         matches.dedup();
         if matches.is_empty() {
-            anyhow::bail!("file source wildcard matched no files: {}", pattern);
+            return Err(SourceReason::from_conf()
+                .to_err()
+                .with_detail(format!("file source wildcard matched no files: {}", pattern)));
         }
         Ok(matches
             .into_iter()
@@ -108,16 +123,16 @@ impl SourceFactory for FileSourceFactory {
     }
 
     fn validate_spec(&self, resolved: &ResolvedSourceSpec) -> SourceResult<()> {
-        let res: anyhow::Result<()> = (|| {
-            if let Err(e) = Tags::validate(&resolved.tags) {
-                anyhow::bail!("Invalid tags: {}", e);
-            }
-            FileSourceSpec::from_resolved(resolved)?;
-            Ok(())
-        })();
-        res.owe(SourceReason::from_conf())
+        if let Err(e) = Tags::validate(&resolved.tags) {
+            return Err(SourceReason::from_conf()
+                .to_err()
+                .with_detail(format!("Invalid tags: {}", e))
+                .with(resolved.name.as_str()));
+        }
+        FileSourceSpec::from_resolved(resolved)
             .with(resolved.name.as_str())
-            .want("validate file source spec")
+            .want("validate file source spec")?;
+        Ok(())
     }
 
     async fn build(
@@ -187,8 +202,8 @@ impl SourceFactory for FileSourceFactory {
             Ok(SourceSvcIns::new().with_sources(handles))
         };
 
-        let fut: anyhow::Result<SourceSvcIns> = fut.await;
-        fut.owe(SourceReason::from_conf())
+        let fut: SourceResult<SourceSvcIns> = fut.await;
+        fut
             .with(resolved.name.as_str())
             .want("build file source service")
     }

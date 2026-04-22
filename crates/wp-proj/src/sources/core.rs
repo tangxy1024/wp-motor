@@ -76,7 +76,9 @@ impl Sources {
 
         // Verify configuration file exists
         if !wpsrc_path.exists() {
-            return Err(RunReason::from_conf().to_err());
+            return Err(RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("source config not found: {}", wpsrc_path.display())));
         }
 
         // Parse and validate configuration

@@ -7,6 +7,7 @@ use tokio::net::TcpListener;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
+use orion_error::ToStructError;
 use wp_connector_api::{ControlEvent, CtrlRx, SourceError, SourceReason, SourceResult};
 
 use crate::sources::tcp::MessageBatch;
@@ -150,10 +151,9 @@ impl TcpServer {
         batch_config: BatchConfig,
     ) -> SourceResult<()> {
         let listener = TcpListener::bind(&address).await.map_err(|e| {
-            SourceError::from(SourceReason::Disconnect(format!(
-                "failed to bind TCP socket to {}: {}",
-                address, e
-            )))
+            SourceReason::Disconnect(format!("failed to bind TCP socket to {}", address))
+                .to_err()
+                .with_source(e)
         })?;
 
         let local = listener

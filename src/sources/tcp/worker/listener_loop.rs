@@ -1,4 +1,5 @@
 use crate::sources::tcp::ConnectionRegistry;
+use orion_error::ToStructError;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc};
 use tokio::time;
@@ -45,10 +46,9 @@ impl TcpListenerLoop {
 
     pub async fn run(&mut self) -> SourceResult<()> {
         let listener = TcpListener::bind(&self.address).await.map_err(|e| {
-            SourceError::from(SourceReason::Disconnect(format!(
-                "failed to bind TCP socket to {}: {}",
-                self.address, e
-            )))
+            SourceReason::Disconnect(format!("failed to bind TCP socket to {}", self.address))
+                .to_err()
+                .with_source(e)
         })?;
 
         let local = listener

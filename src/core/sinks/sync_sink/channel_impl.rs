@@ -14,6 +14,14 @@ use wp_connector_api::{SinkError, SinkReason, SinkResult};
 // 为方便使用，重新导出
 use super::SinkDatYSender;
 
+fn sink_channel_closed_error() -> SinkError {
+    SinkReason::sink("sink channel closed").err()
+}
+
+fn sink_channel_full_error() -> SinkError {
+    SinkReason::sink("sink channel full - cannot send batch package").err()
+}
+
 impl RecSyncSink for SinkDatYSender {
     fn send_to_sink(&self, data: SinkRecUnit) -> SinkResult<()> {
         // 非阻塞语义：失败直接返回错误，由上层策略处理背压/错误。
@@ -45,9 +53,7 @@ impl RecSyncSink for SinkDatYSender {
             }
             Err(TrySendError::Closed(_)) => {
                 runtime_counters::rec_sink_channel_closed();
-                TrySendStatus::Err(Arc::new(SinkError::from(SinkReason::Sink(
-                    "sink channel closed".to_string(),
-                ))))
+                TrySendStatus::Err(Arc::new(sink_channel_closed_error()))
             }
         }
     }
@@ -65,15 +71,11 @@ impl RecSyncSink for SinkDatYSender {
                     "backpressure: sink dispatcher channel full, batch_size={}",
                     p.len()
                 );
-                Err(SinkError::from(SinkReason::Sink(
-                    "Sink channel full - cannot send batch package".to_string(),
-                )))
+                Err(sink_channel_full_error())
             }
             Err(TrySendError::Closed(_)) => {
                 runtime_counters::rec_sink_channel_closed();
-                Err(SinkError::from(SinkReason::Sink(
-                    "Sink channel closed".to_string(),
-                )))
+                Err(sink_channel_closed_error())
             }
         }
     }
@@ -105,9 +107,7 @@ impl RecSyncSink for SinkDatYSender {
                 // Channel 已关闭
                 runtime_counters::rec_sink_channel_closed();
                 for _ in 0..data_len {
-                    results.push(TrySendStatus::Err(Arc::new(SinkError::from(
-                        SinkReason::Sink("sink channel closed".to_string()),
-                    ))));
+                    results.push(TrySendStatus::Err(Arc::new(sink_channel_closed_error())));
                 }
             }
         }

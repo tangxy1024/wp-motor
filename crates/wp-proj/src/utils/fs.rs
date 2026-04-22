@@ -33,7 +33,7 @@ impl FsOps {
         let path = path.as_ref();
         if !path.exists() {
             fs::create_dir_all(path)
-                .to_run_err_with(|_| format!("创建目录失败: {}", path.display()))?;
+                .to_run_err_with_source(|_| format!("创建目录失败: {}", path.display()))?;
         }
         Ok(())
     }
@@ -56,7 +56,8 @@ impl FsOps {
     /// ```
     pub fn read_to_string<P: AsRef<Path>>(path: P) -> RunResult<String> {
         let path = path.as_ref();
-        fs::read_to_string(path).to_run_err_with(|_| format!("读取文件失败: {}", path.display()))
+        fs::read_to_string(path)
+            .to_run_err_with_source(|_| format!("读取文件失败: {}", path.display()))
     }
 
     /// 安全写入文件内容
@@ -79,7 +80,8 @@ impl FsOps {
             Self::ensure_dir(parent)?;
         }
 
-        fs::write(path, content).to_run_err_with(|_| format!("写入文件失败: {}", path.display()))
+        fs::write(path, content)
+            .to_run_err_with_source(|_| format!("写入文件失败: {}", path.display()))
     }
 
     /// 安全写入文件（带备份）
@@ -101,7 +103,7 @@ impl FsOps {
         if path.exists() {
             let backup_path = path.with_extension("bak");
             fs::copy(path, &backup_path)
-                .to_run_err_with(|_| format!("创建备份失败: {}", backup_path.display()))?;
+                .to_run_err_with_source(|_| format!("创建备份失败: {}", backup_path.display()))?;
         }
 
         Self::write(path, content)
@@ -167,7 +169,7 @@ impl FsOps {
         }
 
         let metadata = fs::metadata(path)
-            .to_run_err_with(|_| format!("获取文件信息失败: {}", path.display()))?;
+            .to_run_err_with_source(|_| format!("获取文件信息失败: {}", path.display()))?;
 
         Ok(metadata.len() > 0)
     }

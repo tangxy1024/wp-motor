@@ -4,7 +4,7 @@ use orion_conf::{
     ToStructError,
     error::{ConfIOReason, OrionConfResult},
 };
-use orion_error::UvsFrom;
+use orion_error::{ErrorWith, UvsFrom};
 use serde::{Deserialize, Serialize};
 
 /// Source 实例级配置（最小实现）：
@@ -78,7 +78,10 @@ impl Validate for SourceInstanceConf {
                 .with_detail("source.name must not be empty"));
         }
         if let Err(e) = crate::utils::validate_tags(&self.core.tags) {
-            return Err(ConfIOReason::from_validation().to_err().with_detail(e));
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(e)
+                .with(self.core.name.clone()));
         }
         Ok(())
     }

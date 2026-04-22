@@ -86,11 +86,9 @@ fn test_stat_src_file_counts_all_enabled_sources() {
     let ctx = Ctx::new(root.to_string_lossy().to_string());
 
     let report =
-        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict);
-
-    assert!(report.is_some(), "Should return a report");
-
-    let report = report.unwrap();
+        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+            .unwrap()
+            .expect("Should return a report");
     assert_eq!(
         report.items.len(),
         3,
@@ -117,7 +115,8 @@ fn test_stat_src_file_individual_source_counts() {
 
     let report =
         list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
-            .unwrap();
+            .unwrap()
+            .expect("should return report");
 
     // Check individual source counts
     let source1 = report
@@ -182,13 +181,9 @@ params_override = { base = "data/in_dat", file = "nonexistent.log" }
     let ctx = Ctx::new(root.to_string_lossy().to_string());
 
     let report =
-        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict);
-
-    assert!(
-        report.is_some(),
-        "Should return a report even when file is missing"
-    );
-    let report = report.unwrap();
+        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+            .unwrap()
+            .expect("Should return a report even when file is missing");
 
     assert_eq!(report.items.len(), 1);
     assert_eq!(
@@ -242,10 +237,9 @@ params_override = { base = "data", file = "test.log" }
     let ctx = Ctx::new(root.to_string_lossy().to_string());
 
     let report =
-        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict);
-
-    assert!(report.is_some());
-    let report = report.unwrap();
+        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+            .unwrap()
+            .expect("should return report");
 
     assert_eq!(
         report.items[0].lines,
@@ -272,7 +266,8 @@ fn test_stat_src_file_with_empty_wpsrc() {
     let ctx = Ctx::new(root.to_string_lossy().to_string());
 
     let report =
-        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict);
+        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+            .unwrap();
 
     // Should either return None or empty report
     if let Some(report) = report {
@@ -283,6 +278,25 @@ fn test_stat_src_file_with_empty_wpsrc() {
     let total =
         total_input_from_wpsrc(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict).unwrap();
     assert_eq!(total, None);
+}
+
+#[test]
+fn test_stat_src_file_invalid_wpsrc_reports_error_instead_of_none() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+
+    fs::create_dir_all(root.join("topology/sources")).unwrap();
+    fs::write(root.join("topology/sources/wpsrc.toml"), "invalid = [").unwrap();
+
+    let eng_conf = EngineConfig::init(root.to_str().unwrap());
+    let dict = EnvDict::new();
+    let ctx = Ctx::new(root.to_string_lossy().to_string());
+
+    let err =
+        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+            .expect_err("invalid wpsrc should return structured error");
+    let msg = format!("{err:#}");
+    assert!(msg.contains("parse wpsrc config"));
 }
 
 #[test]
@@ -326,7 +340,8 @@ params_override = { base = "data/in_dat", file = "gen*.dat" }
 
     let report =
         list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
-            .unwrap();
+            .unwrap()
+            .expect("should return report");
     assert_eq!(report.total_enabled_lines, 5);
     assert_eq!(report.items.len(), 1);
     assert_eq!(report.items[0].lines, Some(5));
@@ -374,7 +389,8 @@ params_override = { path = "legacy.log" }
 
     let report =
         list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
-            .unwrap();
+            .unwrap()
+            .expect("should return report");
     assert_eq!(report.items.len(), 1);
     assert_eq!(report.items[0].path, "legacy.log");
     assert!(
@@ -388,6 +404,65 @@ params_override = { path = "legacy.log" }
     let err = total_input_from_wpsrc(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
         .unwrap_err();
     assert!(format!("{err:#}").contains("'path' is not supported"));
+}
+
+#[test]
+fn test_stat_src_file_rejects_disallowed_param_override() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+
+    fs::create_dir_all(root.join("connectors/source.d")).unwrap();
+    fs::create_dir_all(root.join("topology/sources")).unwrap();
+    fs::create_dir_all(root.join("data/in_dat")).unwrap();
+    fs::write(root.join("data/in_dat/default.log"), "default\n").unwrap();
+
+    fs::write(
+        root.join("connectors/source.d/file.toml"),
+        r#"
+[[connectors]]
+id = "test_file"
+type = "file"
+allow_override = ["base"]
+
+[connectors.default_params]
+base = "data/in_dat"
+file = "default.log"
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        root.join("topology/sources/wpsrc.toml"),
+        r#"
+[[sources]]
+key = "bad_override"
+connect = "test_file"
+enable = true
+params_override = { file = "custom.log" }
+"#,
+    )
+    .unwrap();
+
+    let eng_conf = EngineConfig::init(root.to_str().unwrap());
+    let dict = EnvDict::new();
+    let ctx = Ctx::new(root.to_string_lossy().to_string());
+
+    let report =
+        list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+            .unwrap()
+            .expect("should return report with item-level error");
+    assert_eq!(report.items.len(), 1);
+    assert_eq!(report.items[0].lines, None);
+    let item_error = report.items[0].error.as_deref().unwrap();
+    assert!(item_error.contains("override not allowed"));
+    assert!(item_error.contains("'file'"));
+
+    let err = total_input_from_wpsrc(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
+        .unwrap_err();
+    let msg = format!("{err:#}");
+    assert!(msg.contains("load wpsrc source instances"));
+    assert!(msg.contains("override not allowed"));
+    assert!(msg.contains("'file'"));
 }
 
 #[test]
@@ -428,7 +503,8 @@ params_override = { base = "data/in_dat", file = "gen*.dat" }
 
     let report =
         list_file_sources_with_lines(Path::new(root.to_str().unwrap()), &eng_conf, &ctx, &dict)
-            .unwrap();
+            .unwrap()
+            .expect("should return report");
     assert_eq!(report.items.len(), 1);
     assert!(
         report.items[0]

@@ -5,7 +5,7 @@ use crate::sources::types::SourceConnector;
 use crate::structure::{SourceInstanceConf, Validate};
 use orion_conf::EnvTomlLoad;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
+use orion_error::{ErrorOweSource, ErrorWith, ToStructError, UvsFrom, WrapStructError};
 use orion_variate::{EnvDict, EnvEvaluable};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -18,7 +18,7 @@ pub fn parse_and_validate_only(
     dict: &EnvDict,
 ) -> OrionConfResult<Vec<wp_specs::CoreSourceSpec>> {
     let wrapper: WpSourcesConfig = WpSourcesConfig::env_parse_toml(config_str, dict)
-        .owe_conf()
+        .owe_conf_source()
         .want("parse sources v2")?;
     let mut out: Vec<wp_specs::CoreSourceSpec> = Vec::new();
     for s in wrapper.sources.into_iter() {
@@ -61,7 +61,11 @@ fn merge_source_params(
         if !allow.iter().any(|x| x == k) {
             return Err(ConfIOReason::from_validation()
                 .to_err()
-                .with_detail("override not allowed")
+                .with_detail(format!(
+                    "override not allowed: parameter '{}'; allowed keys: [{}]",
+                    k,
+                    allow.join(", ")
+                ))
                 .with(allow.join(",")));
         }
         out.insert(k.clone(), v.clone());
@@ -76,7 +80,7 @@ pub fn load_source_instances_from_str(
     dict: &EnvDict,
 ) -> OrionConfResult<Vec<SourceInstanceConf>> {
     let src_conf: WpSourcesConfig = WpSourcesConfig::env_parse_toml(config_str, dict)
-        .owe_conf()
+        .owe_conf_source()
         .want("parse sources")?
         .env_eval(dict);
     let cnn_dict = load_connectors_for(start, dict)?;
@@ -89,7 +93,7 @@ pub fn load_source_instances_from_file(
     dict: &EnvDict,
 ) -> OrionConfResult<Vec<SourceInstanceConf>> {
     let content = std::fs::read_to_string(path)
-        .owe_conf()
+        .owe_conf_source()
         .want("load sources config")
         .with(path)?;
     let start = if path.is_dir() {
@@ -112,20 +116,35 @@ pub fn build_source_instances(
         if !s.enable.unwrap_or(true) {
             continue;
         }
-        let conn = cnn_dict.get(&s.connect).ok_or_else(|| {
-            ConfIOReason::from_validation()
-                .to_err()
-                .with_detail(format!(
-                    "connector not found: '{}' (looked up under connectors/source.d)",
-                    s.connect
-                ))
-        })?;
-        let merged = merge_source_params(&conn.default_params, &s.params, &conn.allow_override)?;
-        let mut inst = SourceInstanceConf::new_type(s.key, conn.kind.clone(), merged, s.tags);
-        inst.connector_id = Some(conn.id.clone());
-        srcins_confs.push(inst);
+        srcins_confs.push(resolve_source_instance(&s, cnn_dict)?);
     }
     Ok(srcins_confs)
+}
+
+/// Resolve one source item with the same connector lookup and parameter merge
+/// semantics used by the runtime loader. Intended for observability views that
+/// need to report per-item errors without aborting the whole listing.
+pub fn resolve_source_instance(
+    source: &super::types::WpSource,
+    cnn_dict: &BTreeMap<String, SourceConnector>,
+) -> OrionConfResult<SourceInstanceConf> {
+    let conn = cnn_dict.get(&source.connect).ok_or_else(|| {
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!(
+                "connector not found: '{}' (looked up under connectors/source.d)",
+                source.connect
+            ))
+    })?;
+    let merged = merge_source_params(&conn.default_params, &source.params, &conn.allow_override)?;
+    let mut inst = SourceInstanceConf::new_type(
+        source.key.clone(),
+        conn.kind.clone(),
+        merged,
+        source.tags.clone(),
+    );
+    inst.connector_id = Some(conn.id.clone());
+    Ok(inst)
 }
 
 /// 使用插件 Factory 执行“类型特有校验”（不触发 I/O）。
@@ -146,12 +165,10 @@ pub fn validate_specs_with_factory(
                 item.connector_id.clone().unwrap_or_default(),
             );
             factory.validate_spec(&resolved).map_err(|e| {
-                ConfIOReason::from_validation()
-                    .to_err()
-                    .with_detail(format!(
-                        "plugin validate failed for source '{}' of kind '{}': {}",
-                        core.name, core.kind, e
-                    ))
+                e.wrap(ConfIOReason::from_validation()).with(format!(
+                    "plugin validate failed for source '{}' of kind '{}'",
+                    core.name, core.kind
+                ))
             })?;
         }
     }
@@ -170,7 +187,7 @@ impl ConfigLoader for Vec<SourceInstanceConf> {
     fn load_from_str(content: &str, base: &Path, dict: &EnvDict) -> OrionConfResult<Self> {
         // 解析 TOML 并进行环境变量替换
         let src_conf: WpSourcesConfig = WpSourcesConfig::env_parse_toml(content, dict)
-            .owe_conf()
+            .owe_conf_source()
             .want("parse sources")?
             .env_eval(dict);
 
@@ -230,10 +247,40 @@ mod tests {
         let raw = r#"[[sources]]
 key = "s1"
 connect = "conn1"
-[connectors]
 "#;
         // 最小解析：不校验 connectors（仅返回 name/tags）
         let _ = parse_and_validate_only(raw, &EnvDict::test_default()).expect("parse");
+    }
+
+    #[test]
+    fn parse_rejects_unknown_top_level_connectors_table() {
+        let raw = r#"[[connectors]]
+key = "s1"
+enable = true
+connect = "conn1"
+[connectors.params]
+addr = "127.0.0.1"
+"#;
+        let err = parse_and_validate_only(raw, &EnvDict::test_default())
+            .expect_err("unknown top-level connectors table should fail")
+            .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("connectors"));
+    }
+
+    #[test]
+    fn parse_rejects_unknown_source_field() {
+        let raw = r#"[[sources]]
+key = "s1"
+enable = true
+connect = "conn1"
+connector = "typo"
+"#;
+        let err = parse_and_validate_only(raw, &EnvDict::test_default())
+            .expect_err("unknown source field should fail")
+            .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("connector"));
     }
 
     #[test]

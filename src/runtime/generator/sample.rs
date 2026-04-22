@@ -27,7 +27,10 @@ fn load_samples(rule_root: &str, find_name: &str) -> RunResult<Vec<String>> {
         .want("find sample files")?;
     info_ctrl!("run_sample_direct: found {} files", files.len());
     if files.is_empty() {
-        return Err(RunReason::from_conf().to_err());
+        return Err(RunReason::from_conf().to_err().with_detail(format!(
+            "sample files not found under '{}' for pattern '{}'",
+            rule_root, find_name
+        )));
     }
     // load lines
     let mut out = Vec::new();

@@ -1,7 +1,5 @@
-use crate::sinks::prelude::*;
-// legacy imports removed after externalization
-
 use wp_conf::structure::SinkInstanceConf;
+use wp_connector_api::{SinkReason, SinkResult};
 
 use super::backends::file::AsyncFileSink;
 use super::utils::formatter::AsyncFormatter;
@@ -11,7 +9,7 @@ pub type AsyncFileSinkEx = AsyncFormatter<AsyncFileSink>;
 pub async fn build_file_sink(
     conf: &SinkInstanceConf,
     out_path: &str,
-) -> AnyResult<AsyncFileSinkEx> {
+) -> SinkResult<AsyncFileSinkEx> {
     build_file_sink_with_sync(conf, out_path, false).await
 }
 
@@ -19,9 +17,15 @@ pub async fn build_file_sink_with_sync(
     conf: &SinkInstanceConf,
     out_path: &str,
     sync: bool,
-) -> AnyResult<AsyncFileSinkEx> {
+) -> SinkResult<AsyncFileSinkEx> {
     let mut out: AsyncFileSinkEx = AsyncFormatter::new(conf.fmt);
-    out.next_pipe(AsyncFileSink::with_sync(out_path, sync).await?);
+    out.next_pipe(
+        AsyncFileSink::with_sync(out_path, sync)
+            .await
+            .map_err(|e| {
+                SinkReason::sink("build async file sink failed").err_detail(e.to_string())
+            })?,
+    );
     Ok(out)
 }
 

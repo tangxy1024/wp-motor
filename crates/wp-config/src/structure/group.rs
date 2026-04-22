@@ -3,13 +3,11 @@ use orion_conf::{
     ToStructError,
     error::{ConfIOReason, OrionConfResult},
 };
-use orion_error::UvsFrom;
+use orion_error::{ErrorWith, UvsFrom, WrapStructError};
 use orion_variate::EnvEvaluable;
 use wp_model_core::model::fmt_def::TextFmt;
 
-use crate::types::AnyResult;
 use crate::{structure::SinkInstanceConf, utils::env_eval_vec};
-use anyhow::bail;
 use serde::{Deserialize, Serialize};
 use wildmatch::WildMatch;
 use wp_specs::WildArray;
@@ -83,16 +81,20 @@ pub struct GroupExpectSpec {
 
 impl GroupExpectSpec {
     /// 轻量合法性检查（范围约束）
-    pub fn validate(&self) -> AnyResult<()> {
+    pub fn validate(&self) -> OrionConfResult<()> {
         if let Some(x) = self.sum_tol
             && !(0.0..=1.0).contains(&x)
         {
-            bail!("sum_tol must be in [0,1], got {}", x);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("sum_tol must be in [0,1], got {}", x)));
         }
         if let Some(x) = self.others_max
             && !(0.0..=1000.0).contains(&x)
         {
-            bail!("others_max must be in [0,1000], got {}", x);
+            return Err(ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("others_max must be in [0,1000], got {}", x)));
         }
         Ok(())
     }
@@ -306,9 +308,9 @@ impl crate::structure::Validate for FlexGroup {
         if let Some(g) = &self.expect
             && let Err(e) = g.validate()
         {
-            return Err(ConfIOReason::from_validation()
-                .to_err()
-                .with_detail(e.to_string()));
+            return Err(e
+                .wrap(ConfIOReason::from_validation())
+                .with("group.expect validate"));
         }
         if self.sinks.is_empty() {
             return Err(ConfIOReason::from_validation()
@@ -334,9 +336,9 @@ impl crate::structure::Validate for FixedGroup {
         if let Some(g) = &self.expect
             && let Err(e) = g.validate()
         {
-            return Err(ConfIOReason::from_validation()
-                .to_err()
-                .with_detail(e.to_string()));
+            return Err(e
+                .wrap(ConfIOReason::from_validation())
+                .with("group.expect validate"));
         }
         if self.sinks.is_empty() {
             return Err(ConfIOReason::from_validation()
@@ -352,16 +354,16 @@ impl crate::structure::Validate for SinkGroupConf {
         match self {
             SinkGroupConf::Flexi(x) => {
                 if let Err(e) = x.validate() {
-                    return Err(ConfIOReason::from_validation()
-                        .to_err()
-                        .with_detail(format!("flexi group validate: {}", e)));
+                    return Err(e
+                        .wrap(ConfIOReason::from_validation())
+                        .with_detail("flexi group validate"));
                 }
             }
             SinkGroupConf::Fixed(x) => {
                 if let Err(e) = x.validate() {
-                    return Err(ConfIOReason::from_validation()
-                        .to_err()
-                        .with_detail(format!("fixed group validate: {}", e)));
+                    return Err(e
+                        .wrap(ConfIOReason::from_validation())
+                        .with_detail("fixed group validate"));
                 }
             }
         }

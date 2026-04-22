@@ -65,6 +65,7 @@ impl Default for StatConf {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct StatItem {
     #[serde(default)]
     pub key: String,
@@ -145,5 +146,25 @@ impl StatConf {
                 top_n: Some(20),
             }],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stat_item_rejects_unknown_fields() {
+        let err = toml::from_str::<StatConf>(
+            r#"
+            [[pick]]
+            key = "pick_stat"
+            field = ["typo"]
+            "#,
+        )
+        .expect_err("unknown stat item fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("field"));
     }
 }

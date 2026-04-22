@@ -79,7 +79,9 @@ pub fn load_sink_defaults<P: AsRef<Path>>(
     if !p.exists() {
         return Ok(None);
     }
-    let f: super::types::DefaultsFile = DefaultsFile::env_load_toml(&p, _dict)?;
+    let f: super::types::DefaultsFile = DefaultsFile::env_load_toml(&p, _dict)
+        .with(&p)
+        .want("load sink defaults")?;
     Ok(Some(f.defaults))
 }
 

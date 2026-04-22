@@ -8,6 +8,7 @@ use orion_variate::{EnvDict, EnvEvaluable};
 use serde_json::json;
 use wp_conf::connectors::{ParamMap, param_value_from_toml};
 use wp_conf::sinks::ConnectorRec;
+use wp_conf::sinks::io::find_connectors_base_dir;
 use wp_conf::sinks::load_connectors_for;
 use wp_conf::structure::SinkInstanceConf;
 use wp_model_core::model::fmt_def::TextFmt;
@@ -53,10 +54,13 @@ impl WarpConf {
         let conn_id = match conf.output.connect.clone() {
             Some(cnn) => cnn,
             None => {
-                return ConfIOReason::from_validation().err_result();
+                return Err(ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail("wpgen.output.connect is required"));
             }
         };
-        let (_start_root, conn) = self.load_connector_by_id(&conn_id, dict)?;
+        let conf_path = self.config_path_string(WPGEN_TOML);
+        let (_start_root, conn) = self.load_connector_by_id(&conn_id, &conf_path, dict)?;
         let mut merged = Self::merge_params_with_whitelist(&conn, &conf.output.params, &conn_id)?;
         // 自动开启：当生成速率无限制（speed==0）且连接器类型为 tcp，且未显式设置 max_backoff/sendq_backoff/sendq_backpressure
         if conn.kind == "tcp" {
@@ -83,6 +87,7 @@ impl WarpConf {
     fn load_connector_by_id(
         &self,
         conn_id: &str,
+        config_path: &str,
         dict: &EnvDict,
     ) -> OrionConfResult<(String, ConnectorRec)> {
         let wp_conf = EngineConfig::load_or_init(self.work_root(), dict)
@@ -100,13 +105,24 @@ impl WarpConf {
         };
         let start_root = resolved_root.to_string_lossy().to_string();
         let connectors = load_connectors_for(&start_root, dict)?;
+        let connector_dir = find_connectors_base_dir(Path::new(&start_root))
+            .unwrap_or_else(|| Path::new(&start_root).join("connectors/sink.d"));
         let conn = connectors.get(conn_id).cloned().ok_or_else(|| {
             let mut known: Vec<String> = connectors.keys().cloned().collect();
             known.sort();
-            if known.len() > 8 {
-                known.truncate(8);
+            let mut detail = format!(
+                "wpgen config {}: [output].connect '{}' not found in sink connectors at {}; available sink connectors: {}",
+                config_path,
+                conn_id,
+                connector_dir.display(),
+                known.join(", ")
+            );
+            if conn_id.ends_with("_src") {
+                detail.push_str("; output.connect must reference a sink connector id, not a source connector id");
             }
             ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(detail)
         })?;
         Ok((start_root, conn))
     }

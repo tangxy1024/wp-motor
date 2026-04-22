@@ -1,15 +1,20 @@
 version = "1.0"
+robust = "normal"
+
 [models]
 wpl = "./wpl"
 oml = "./oml"
+
 [topology]
 sources = "./topology/sources"
 sinks = "./topology/sinks"
+
+[performance]
+parse_workers = 2
+rate_limit_rps = 10000
+
 [rescue]
 path = "./rescue"
-parallel = 2
-speed_limit = 10000
-robust = "normal"
 
 [semantic]
 enabled = true

@@ -140,7 +140,9 @@ pub fn resolve_run_work_root(raw: &Option<String>) -> RunResult<String> {
         Some(raw) => {
             let path = PathBuf::from(raw);
             if !path.is_absolute() {
-                return RunReason::from_conf().err_result();
+                return Err(RunReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("work_root must be an absolute path, got '{}'", raw)));
             }
             Ok(path.to_string_lossy().to_string())
         }

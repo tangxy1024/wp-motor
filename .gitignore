@@ -27,8 +27,7 @@ tmp/
 .tmp/
 *.log
 my_example
-# Cargo.lock
-
+Cargo.lock
 # Python cache (docs scripts)
 __pycache__/
 *.pyc
@@ -42,4 +41,8 @@ docs/node_modules/
 .env.*
 *.log
 *.dat
+<<<<<<< HEAD
 .claude/settings.local.json
+=======
+.claude/settings.local.json
+>>>>>>> hotfix/1.20

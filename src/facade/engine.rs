@@ -435,14 +435,11 @@ async fn load_engine_res(
                 knowdb_handler = Some(handler);
             }
             Err(err) => {
-                warn_ctrl!("init knowdb skipped ({}): {}", knowdb_path.display(), err);
+                crate::knowledge::log_knowdb_init_error("", &knowdb_path, &err);
             }
         }
     } else {
-        warn_ctrl!(
-            "knowdb config not found at {}; skip knowdb init",
-            knowdb_path.display()
-        );
+        crate::knowledge::log_missing_knowdb_config("", &knowdb_path);
     }
 
     let infra_sinks = InfraSinkService::default_ins(
@@ -558,14 +555,11 @@ async fn load_processing_res(
                 knowdb_handler = Some(handler);
             }
             Err(err) => {
-                warn_ctrl!("init knowdb skipped ({}): {}", knowdb_path.display(), err);
+                crate::knowledge::log_knowdb_init_error("", &knowdb_path, &err);
             }
         }
     } else {
-        warn_ctrl!(
-            "knowdb config not found at {}; skip knowdb init",
-            knowdb_path.display()
-        );
+        crate::knowledge::log_missing_knowdb_config("", &knowdb_path);
     }
 
     let infra_sinks = InfraSinkService::default_ins(
@@ -669,13 +663,16 @@ fn authority_path_from_uri(uri: &str) -> Option<&str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use orion_variate::ValueType;
     use wp_conf::test_support::ForTest;
     use wp_proj::project::{WarpProject, init::PrjScope};
 
     #[tokio::test]
     async fn load_processing_res_without_persist_does_not_write_runtime_state() {
+        crate::connectors::startup::init_runtime_registries();
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
-        let dict = EnvDict::test_default();
+        let mut dict = EnvDict::test_default();
+        dict.insert("SEC_PWD", ValueType::from("test-password"));
         WarpProject::init(temp_dir.path(), PrjScope::Full, &dict).expect("init project");
 
         let conf_manager = WarpConf::new(temp_dir.path());

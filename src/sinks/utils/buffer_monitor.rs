@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use orion_error::ErrorOwe;
-use wp_connector_api::{SinkError, SinkReason, SinkResult};
+use wp_connector_api::{SinkReason, SinkResult};
 use wp_model_core::model::Value;
 
 use crate::sinks::SinkRecUnit;
@@ -100,16 +100,14 @@ where
             }
             let formatted = extract_formatted(data.data());
             if let Err(e) = buffer.write_all(formatted.as_bytes()) {
-                return TrySendStatus::Err(Arc::new(SinkError::from(SinkReason::Sink(format!(
-                    "buffer write error: {}",
-                    e
-                )))));
+                return TrySendStatus::Err(Arc::new(
+                    SinkReason::sink("buffer write failed").err_source(e),
+                ));
             }
             if let Err(e) = buffer.write_all(b"\n") {
-                return TrySendStatus::Err(Arc::new(SinkError::from(SinkReason::Sink(format!(
-                    "buffer write error: {}",
-                    e
-                )))));
+                return TrySendStatus::Err(Arc::new(
+                    SinkReason::sink("buffer newline write failed").err_source(e),
+                ));
             }
         }
         if let Some(ref next_proc) = self.next_proc {

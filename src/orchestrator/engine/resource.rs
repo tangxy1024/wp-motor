@@ -3,8 +3,10 @@ use crate::knowledge::KnowdbHandler;
 use crate::resources::ResManager;
 use crate::runtime::sink::act_sink::SinkService;
 use crate::runtime::sink::infrastructure::InfraSinkService;
+use orion_error::{ToStructError, UvsFrom};
 use std::sync::Arc;
 use wp_connector_api::{AcceptorHandle, DataSource, ServiceAcceptor, SourceHandle};
+use wp_error::run_error::{RunReason, RunResult};
 
 /// WarpResource 的增强版本，支持新旧架构的桥接
 ///
@@ -101,18 +103,22 @@ impl EngineResource {
     }
 
     /// 验证资源的完整性
-    pub fn validate(&self) -> Result<(), String> {
+    pub fn validate(&self) -> RunResult<()> {
         if !self.has_sources() {
-            return Err("No data sources configured".to_string());
+            return Err(RunReason::from_conf()
+                .to_err()
+                .with_detail("No data sources configured"));
         }
 
         Ok(())
     }
 
     /// 简化版本的验证，只检查数据源
-    pub fn validate_sources_only(&self) -> Result<(), String> {
+    pub fn validate_sources_only(&self) -> RunResult<()> {
         if !self.has_sources() {
-            return Err("No data sources configured".to_string());
+            return Err(RunReason::from_conf()
+                .to_err()
+                .with_detail("No data sources configured"));
         }
         Ok(())
     }
@@ -165,12 +171,12 @@ impl WarpResourceBuilder {
         self
     }
 
-    pub fn build(self) -> Result<EngineResource, String> {
+    pub fn build(self) -> RunResult<EngineResource> {
         self.resource.validate()?;
         Ok(self.resource)
     }
 
-    pub fn build_sources_only(self) -> Result<EngineResource, String> {
+    pub fn build_sources_only(self) -> RunResult<EngineResource> {
         self.resource.validate_sources_only()?;
         Ok(self.resource)
     }

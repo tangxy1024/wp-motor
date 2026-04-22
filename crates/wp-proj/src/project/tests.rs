@@ -195,6 +195,23 @@ encode = "text"
 }
 
 #[cfg(test)]
+fn create_invalid_sink_route(work_root: &str) {
+    let route_content = r#"version = "2.0"
+
+[sink_group]
+name = "broken"
+"#;
+    for rel in [
+        "models/sinks/business.d/broken.toml",
+        "topology/sinks/business.d/broken.toml",
+    ] {
+        let path = format!("{}/{}", work_root, rel);
+        fs::create_dir_all(std::path::Path::new(&path).parent().unwrap()).unwrap();
+        fs::write(path, route_content).unwrap();
+    }
+}
+
+#[cfg(test)]
 /// 清理测试目录的辅助函数
 fn cleanup_test_dir(work_root: &str) {
     let _ = std::fs::remove_dir_all(work_root);
@@ -730,6 +747,25 @@ token_file = "${HOME}/.warp_parse/admin_api.token"
             "Invalid sources - should fail: {:?}",
             check_to_result(project.sources_c().check(&EnvDict::test_default()))
         );
+
+        cleanup_test_dir(&work);
+    }
+
+    #[test]
+    fn test_warpproject_data_clean_reports_sink_clean_failures() {
+        let work = uniq_tmp_dir();
+        create_minimal_project_structure(&work);
+        create_basic_wparse_config(&work);
+        create_invalid_sink_route(&work);
+
+        let project = WarpProject::bare(&work);
+        let result = project.data_clean(&EnvDict::test_default());
+
+        assert!(result.is_err(), "sink clean failure should be reported");
+        let err = result.unwrap_err();
+        let detail = err.detail().clone().unwrap_or_default();
+        assert!(detail.contains("数据清理存在失败项"));
+        assert!(detail.contains("sinks:"));
 
         cleanup_test_dir(&work);
     }

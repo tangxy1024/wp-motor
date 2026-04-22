@@ -9,7 +9,7 @@ use crate::resources::{ModelName, SinkID};
 use crate::resources::{SinkModelIndex, SinkRuleRegistry};
 use crate::runtime::sink::infrastructure::InfraSinkService;
 use crate::sinks::{InfraSinkAgent, SinkRouteAgent};
-use orion_error::{ErrorOwe, ToStructError, UvsFrom};
+use orion_error::{ToStructError, UvsFrom};
 use wp_conf::engine::EngineConfig;
 use wp_error::RunReason;
 use wp_error::run_error::RunResult;
@@ -82,9 +82,7 @@ impl ResManager {
             .load_all_wpl_code(main_conf, infra_sinks.agent().error())
             .await?;
         res_center.load_all_ldm(main_conf.oml_root()).await?;
-        res_center
-            .load_all_sink(main_conf.sinks_root(), dict)
-            .owe_conf()?;
+        res_center.load_all_sink(main_conf.sinks_root(), dict)?;
         Ok(res_center)
     }
 

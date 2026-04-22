@@ -13,6 +13,7 @@ pub type ConnectorFile = ConnectorTomlFile;
 pub type ConnectorRec = ConnectorDef;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RouteFile {
     #[serde(default)]
     pub version: Option<String>,
@@ -29,6 +30,7 @@ impl EnvEvaluable<RouteFile> for RouteFile {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RouteGroup {
     pub name: String,
     #[serde(default)]
@@ -64,6 +66,7 @@ impl EnvEvaluable<RouteGroup> for RouteGroup {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RouteSink {
     #[serde(rename = "use", alias = "connect", alias = "connector")]
     connect: String,
@@ -146,6 +149,7 @@ impl StringOrArray {
 pub type StrOrVec = StringOrArray;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct DefaultsBody {
     #[serde(default)]
     pub tags: Option<Vec<String>>, // 每层 <=4；留给上层合并
@@ -153,6 +157,78 @@ pub struct DefaultsBody {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct DefaultsFile {
     pub defaults: DefaultsBody,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn route_file_rejects_unknown_top_level_field() {
+        let err = toml::from_str::<RouteFile>(
+            r#"
+            versoin = "1.0"
+
+            [sink_group]
+            name = "demo"
+            "#,
+        )
+        .expect_err("unknown top-level route fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("versoin"));
+    }
+
+    #[test]
+    fn route_sink_rejects_unknown_field_but_keeps_params_open() {
+        let ok = toml::from_str::<RouteFile>(
+            r#"
+            [sink_group]
+            name = "demo"
+
+            [[sink_group.sinks]]
+            use = "custom_sink"
+            [sink_group.sinks.params]
+            arbitrary_plugin_key = "kept"
+            nested = { value = 1 }
+            "#,
+        )
+        .expect("plugin params should remain open");
+        assert_eq!(ok.sink_group.sinks.len(), 1);
+
+        let err = toml::from_str::<RouteFile>(
+            r#"
+            [sink_group]
+            name = "demo"
+
+            [[sink_group.sinks]]
+            use = "custom_sink"
+            param = { arbitrary_plugin_key = "typo" }
+            "#,
+        )
+        .expect_err("unknown route sink fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("param"));
+    }
+
+    #[test]
+    fn defaults_file_rejects_unknown_fields() {
+        let err = toml::from_str::<DefaultsFile>(
+            r#"
+            [defaults]
+            tag = ["typo"]
+
+            [defaults.expect]
+            basis = "group_input"
+            "#,
+        )
+        .expect_err("unknown defaults fields should fail")
+        .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("tag"));
+    }
 }

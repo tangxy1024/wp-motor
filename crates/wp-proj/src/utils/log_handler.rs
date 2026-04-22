@@ -1,7 +1,8 @@
+use orion_error::{ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::path::Path;
 use wp_engine::facade::config::load_warp_engine_confs;
-use wp_error::run_error::RunResult;
+use wp_error::run_error::{RunReason, RunResult};
 use wp_log::conf::LogConf;
 
 /// 通用日志处理器 - 基于WpEngine的LogConf对象进行日志处理
@@ -21,16 +22,14 @@ impl LogHandler {
     /// 从工作目录加载配置并清理日志
     pub fn clean_logs_via_config<P: AsRef<Path>>(work_root: P, dict: &EnvDict) -> RunResult<bool> {
         let work_root = work_root.as_ref();
-        match load_warp_engine_confs(work_root.to_string_lossy().as_ref(), dict) {
-            Ok((_, main_conf)) => {
-                let log_conf = main_conf.log_conf();
-                Self::clean_logs(log_conf, work_root)
-            }
-            Err(e) => {
-                eprintln!("Warning: Failed to load main config: {}", e);
-                Ok(false)
-            }
-        }
+        let (_, main_conf) = load_warp_engine_confs(work_root.to_string_lossy().as_ref(), dict)
+            .map_err(|e| {
+                RunReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("加载主配置以清理日志失败: {}", e))
+            })?;
+        let log_conf = main_conf.log_conf();
+        Self::clean_logs(log_conf, work_root)
     }
 
     /// 从WpEngine的LogConf提取日志路径
@@ -96,13 +95,9 @@ impl LogHandler {
                     println!("✓ Cleaned log directory: {}", normalized_path);
                     Ok(true)
                 }
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to remove log directory {}: {}",
-                        normalized_path, e
-                    );
-                    Ok(false)
-                }
+                Err(e) => Err(RunReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("删除日志目录失败 {}: {}", normalized_path, e))),
             }
         } else {
             Ok(false)
@@ -153,5 +148,27 @@ mod tests {
         let path = PathBuf::from("/Users/./test/./foo/../logs");
         let normalized = LogHandler::normalize_path(&path);
         assert_eq!(normalized, "/Users/test/logs");
+    }
+
+    #[test]
+    fn clean_logs_errors_when_log_path_is_file() {
+        use wp_log::conf::{FileLogConf, LogConf, Output};
+
+        let temp = temp_workdir();
+        let log_file = temp.path().join("data/logs");
+        std::fs::create_dir_all(log_file.parent().unwrap()).expect("log parent");
+        std::fs::write(&log_file, "not a dir").expect("log file");
+
+        let mut cfg = LogConf::default();
+        cfg.output = Output::File;
+        cfg.file = Some(FileLogConf {
+            path: "./data/logs".to_string(),
+        });
+
+        let err = LogHandler::clean_logs(&cfg, temp.path())
+            .expect_err("file path should fail directory cleanup");
+        let detail = err.detail().clone().unwrap_or_default();
+        assert!(detail.contains("删除日志目录失败"));
+        assert!(detail.contains("data/logs"));
     }
 }

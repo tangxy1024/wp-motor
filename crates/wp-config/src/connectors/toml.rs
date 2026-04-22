@@ -1,7 +1,7 @@
 use super::defs::ConnectorTomlFile;
 use orion_conf::EnvTomlLoad;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
-use orion_error::{ErrorOwe, ErrorWith, ToStructError, UvsFrom};
+use orion_error::{ErrorOweSource, ErrorWith, ToStructError, UvsFrom};
 use orion_variate::EnvDict;
 use std::collections::BTreeMap;
 use std::fs;
@@ -13,7 +13,7 @@ fn collect_connector_files(dir: &Path) -> OrionConfResult<Vec<PathBuf>> {
         return Ok(Vec::new());
     }
     let mut files: Vec<PathBuf> = fs::read_dir(dir)
-        .owe_conf()
+        .owe_conf_source()
         .with(dir)?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
@@ -139,6 +139,26 @@ file = "result.dat"
             def.default_params.get("base").and_then(|v| v.as_str()),
             Some("/data/output")
         );
+    }
+
+    #[test]
+    fn load_connector_rejects_unknown_top_level_table() {
+        let base = tmp_dir("conn_unknown_top");
+        let cdir = base.join("connectors").join("sink.d");
+        fs::create_dir_all(&cdir).unwrap();
+
+        let connector_toml = r#"
+[[connector]]
+id = "file_sink"
+type = "file"
+"#;
+        fs::write(cdir.join("bad.toml"), connector_toml).unwrap();
+
+        let err = load_connector_defs_from_dir(&cdir, ConnectorScope::Sink, &EnvDict::new())
+            .expect_err("unknown top-level connector table should fail")
+            .to_string();
+        assert!(err.contains("unknown field"));
+        assert!(err.contains("connector"));
     }
 
     #[test]

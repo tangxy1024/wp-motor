@@ -4,40 +4,108 @@
 //! and counting lines in source files.
 
 use crate::utils::fs::{count_lines_file, resolve_path};
-use anyhow::{Context, Result};
 use glob::glob;
-use orion_variate::EnvDict;
+use orion_conf::EnvTomlLoad;
+use orion_conf::error::{ConfIOReason, OrionConfResult};
+use orion_error::{ErrorOweSource, ErrorWith, ToStructError, UvsFrom};
+use orion_variate::{EnvDict, EnvEvaluable};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use wp_conf::connectors::{ParamMap, merge_params, param_value_from_toml};
+use wp_conf::connectors::ParamMap;
+use wp_conf::constants::WPSRC_TOML;
 use wp_conf::engine::EngineConfig;
+use wp_conf::sources::{WpSource, WpSourcesConfig};
+use wp_conf::structure::SourceInstanceConf;
 
 // Re-export types from wpcnt_lib for convenience
 pub use crate::utils::types::{Ctx, SrcLineItem, SrcLineReport};
 
-type SrcConnectorRec = wp_conf::sources::SourceConnector;
+#[derive(Debug)]
+struct WpsrcSource {
+    source: WpSource,
+    instance: SourceInstanceConf,
+}
 
 // 私有辅助函数
-fn read_wpsrc_toml(work_root: &Path, engine_conf: &EngineConfig) -> Option<String> {
-    let modern = work_root.join(engine_conf.src_root()).join("wpsrc.toml");
-    if modern.exists() {
-        return std::fs::read_to_string(&modern).ok();
+fn wpsrc_path(work_root: &Path, engine_conf: &EngineConfig) -> PathBuf {
+    work_root.join(engine_conf.src_root()).join(WPSRC_TOML)
+}
+
+fn read_wpsrc_toml(path: &Path) -> OrionConfResult<Option<String>> {
+    if path.exists() {
+        return std::fs::read_to_string(path)
+            .owe_conf_source()
+            .with(path)
+            .want("read wpsrc config")
+            .map(Some);
     }
-    None
+    Ok(None)
 }
 
-fn load_connectors_map(
-    base_dir: &Path,
+fn load_wpsrc_sources(
+    work_root: &Path,
+    engine_conf: &EngineConfig,
     dict: &EnvDict,
-) -> Option<BTreeMap<String, SrcConnectorRec>> {
-    wp_conf::sources::load_connectors_for(base_dir, dict).ok()
+) -> OrionConfResult<Option<Vec<WpsrcSource>>> {
+    let path = wpsrc_path(work_root, engine_conf);
+    let Some(content) = read_wpsrc_toml(&path)? else {
+        return Ok(None);
+    };
+
+    let parsed: WpSourcesConfig = WpSourcesConfig::env_parse_toml(&content, dict)
+        .owe_conf_source()
+        .with(&path)
+        .want("parse wpsrc config")?
+        .env_eval(dict);
+    let instances = wp_conf::sources::load_source_instances_from_file(&path, dict)
+        .with(&path)
+        .want("load wpsrc source instances")?;
+
+    let mut instances_by_name: BTreeMap<String, SourceInstanceConf> = instances
+        .into_iter()
+        .map(|instance| (instance.core.name.clone(), instance))
+        .collect();
+    let mut sources = Vec::new();
+    for source in parsed.sources {
+        if let Some(instance) = instances_by_name.remove(&source.key) {
+            sources.push(WpsrcSource { source, instance });
+        }
+    }
+    Ok(Some(sources))
 }
 
-fn toml_table_to_param_map(table: &toml::value::Table) -> ParamMap {
-    table
-        .iter()
-        .map(|(k, v)| (k.clone(), param_value_from_toml(v)))
-        .collect()
+fn load_wpsrc_config(
+    work_root: &Path,
+    engine_conf: &EngineConfig,
+    dict: &EnvDict,
+) -> OrionConfResult<Option<(PathBuf, WpSourcesConfig)>> {
+    let path = wpsrc_path(work_root, engine_conf);
+    let Some(content) = read_wpsrc_toml(&path)? else {
+        return Ok(None);
+    };
+    let parsed: WpSourcesConfig = WpSourcesConfig::env_parse_toml(&content, dict)
+        .owe_conf_source()
+        .with(&path)
+        .want("parse wpsrc config")?
+        .env_eval(dict);
+    Ok(Some((path, parsed)))
+}
+
+fn load_wpsrc_connectors_map(
+    work_root: &Path,
+    engine_conf: &EngineConfig,
+    ctx: &Ctx,
+    dict: &EnvDict,
+) -> OrionConfResult<BTreeMap<String, wp_conf::sources::SourceConnector>> {
+    let source_root = work_root.join(engine_conf.src_root());
+    let conn_dir = wp_conf::find_connectors_base_dir(&source_root, "source.d")
+        .or_else(|| wp_conf::find_connectors_base_dir(&ctx.work_root.join("sources"), "source.d"));
+    match conn_dir.as_ref() {
+        Some(path) => wp_conf::sources::load_connectors_for(path.as_path(), dict)
+            .with(path)
+            .want("load source connectors"),
+        None => Ok(BTreeMap::new()),
+    }
 }
 
 fn has_glob_pattern(value: &str) -> bool {
@@ -58,11 +126,11 @@ fn configured_file_source_path(merged: &ParamMap) -> Option<String> {
     })
 }
 
-fn validated_file_source_path(merged: &ParamMap) -> Result<String> {
+fn validated_file_source_path(merged: &ParamMap) -> OrionConfResult<String> {
     if merged.contains_key("path") {
-        anyhow::bail!(
-            "'path' is not supported for file source; use 'file' (with optional wildcard) and optional 'base'"
-        );
+        return Err(ConfIOReason::from_validation().to_err().with_detail(
+            "'path' is not supported for file source; use 'file' (with optional wildcard) and optional 'base'",
+        ));
     }
 
     let base = merged
@@ -70,18 +138,21 @@ fn validated_file_source_path(merged: &ParamMap) -> Result<String> {
         .and_then(|v| v.as_str())
         .unwrap_or("./data/in_dat");
     if has_glob_pattern(base) {
-        anyhow::bail!("'base' does not support wildcard patterns for file source");
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail("'base' does not support wildcard patterns for file source"));
     }
 
-    let file = merged
-        .get("file")
-        .and_then(|v| v.as_str())
-        .context("Missing required 'file' for file source")?;
+    let file = merged.get("file").and_then(|v| v.as_str()).ok_or_else(|| {
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail("missing required 'file' for file source")
+    })?;
 
     Ok(Path::new(base).join(file).display().to_string())
 }
 
-fn expand_source_paths(raw: &str, work_root: &Path) -> Result<Vec<PathBuf>, String> {
+fn expand_source_paths(raw: &str, work_root: &Path) -> OrionConfResult<Vec<PathBuf>> {
     if !has_glob_pattern(raw) {
         return Ok(vec![resolve_path(raw, work_root)]);
     }
@@ -93,8 +164,18 @@ fn expand_source_paths(raw: &str, work_root: &Path) -> Result<Vec<PathBuf>, Stri
     };
 
     let mut matches = Vec::new();
-    for entry in glob(&pattern).map_err(|e| e.msg.to_string())? {
-        let path = entry.map_err(|e| e.to_string())?;
+    for entry in glob(&pattern).map_err(|err| {
+        ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!("invalid glob pattern: {}", pattern))
+            .with_source(err)
+    })? {
+        let path = entry.map_err(|err| {
+            ConfIOReason::from_validation()
+                .to_err()
+                .with_detail(format!("iterate glob match: {}", pattern))
+                .with_source(err)
+        })?;
         if path.is_file() {
             matches.push(path);
         }
@@ -102,7 +183,9 @@ fn expand_source_paths(raw: &str, work_root: &Path) -> Result<Vec<PathBuf>, Stri
     matches.sort();
     matches.dedup();
     if matches.is_empty() {
-        return Err(format!("glob matched no files: {}", pattern));
+        return Err(ConfIOReason::from_validation()
+            .to_err()
+            .with_detail(format!("glob matched no files: {}", pattern)));
     }
     Ok(matches)
 }
@@ -113,56 +196,42 @@ pub fn total_input_from_wpsrc(
     engine_conf: &EngineConfig,
     ctx: &Ctx,
     dict: &EnvDict,
-) -> Result<Option<u64>> {
-    let Some(content) = read_wpsrc_toml(work_root, engine_conf) else {
+) -> OrionConfResult<Option<u64>> {
+    let Some(sources) = load_wpsrc_sources(work_root, engine_conf, dict)? else {
         return Ok(None);
     };
-    let toml_val: toml::Value = toml::from_str(&content).context("parse wpsrc.toml")?;
+    let wpsrc_path = wpsrc_path(work_root, engine_conf);
     let mut sum = 0u64;
-
-    let Some(arr) = toml_val.get("sources").and_then(|v| v.as_array()) else {
-        return Ok(None);
-    };
-
-    let conn_dir = wp_conf::find_connectors_base_dir(&ctx.work_root.join("sources"), "source.d");
-    let conn_map = conn_dir
-        .as_ref()
-        .and_then(|p| load_connectors_map(p.as_path(), dict))
-        .unwrap_or_default();
     let mut saw_enabled_file_source = false;
 
-    for item in arr {
-        if let Some(conn_id) = item.get("connect").and_then(|v| v.as_str()) {
-            let enabled = item.get("enable").and_then(|v| v.as_bool()).unwrap_or(true);
-            if !enabled {
-                continue;
-            }
-            if let Some(conn) = conn_map.get(conn_id)
-                && conn.kind.eq_ignore_ascii_case("file")
-            {
-                saw_enabled_file_source = true;
-                let key = item.get("key").and_then(|v| v.as_str()).unwrap_or(conn_id);
-                let ov = item
-                    .get("params_override")
-                    .or_else(|| item.get("params"))
-                    .and_then(|v| v.as_table())
-                    .cloned()
-                    .unwrap_or_default();
-                let ov_map = toml_table_to_param_map(&ov);
-                let merged = merge_params(&conn.default_params, &ov_map, &conn.allow_override)
-                    .unwrap_or_else(|_| conn.default_params.clone());
-                let path = validated_file_source_path(&merged)
-                    .with_context(|| format!("validate source '{}' path spec", key))?;
-                let paths = expand_source_paths(&path, &ctx.work_root)
-                    .map_err(anyhow::Error::msg)
-                    .with_context(|| format!("expand source '{}' files", key))?;
-                for pathbuf in paths {
-                    let n = count_lines_file(&pathbuf).with_context(|| {
-                        format!("count lines for source '{}' at {}", key, pathbuf.display())
-                    })?;
-                    sum += n;
-                }
-            }
+    for source in sources {
+        let enabled = source.source.enable.unwrap_or(true);
+        if !enabled || !source.instance.core.kind.eq_ignore_ascii_case("file") {
+            continue;
+        }
+        saw_enabled_file_source = true;
+        let key = source.source.key;
+        let path = validated_file_source_path(&source.instance.core.params).map_err(|e| {
+            e.with(&wpsrc_path)
+                .want(format!("validate source '{}' path spec", key))
+        })?;
+        let paths = expand_source_paths(&path, &ctx.work_root).map_err(|e| {
+            e.with(&wpsrc_path)
+                .want(format!("expand source '{}' files", key))
+        })?;
+        for pathbuf in paths {
+            let n = count_lines_file(&pathbuf).map_err(|e| {
+                ConfIOReason::from_validation()
+                    .to_err()
+                    .with_detail(format!(
+                        "count lines for source '{}' at {}: {}",
+                        key,
+                        pathbuf.display(),
+                        e
+                    ))
+                    .with(&pathbuf)
+            })?;
+            sum += n;
         }
     }
 
@@ -175,119 +244,117 @@ pub fn list_file_sources_with_lines(
     eng_conf: &EngineConfig,
     ctx: &Ctx,
     dict: &EnvDict,
-) -> Option<SrcLineReport> {
-    let content = read_wpsrc_toml(work_root, eng_conf)?;
-    let toml_val: toml::Value = toml::from_str(&content).ok()?;
+) -> OrionConfResult<Option<SrcLineReport>> {
+    let Some((wpsrc_path, source_conf)) = load_wpsrc_config(work_root, eng_conf, dict)? else {
+        return Ok(None);
+    };
+    let conn_map = load_wpsrc_connectors_map(work_root, eng_conf, ctx, dict)?;
     let mut items = Vec::new();
     let mut total = 0u64;
 
-    if let Some(arr) = toml_val.get("sources").and_then(|v| v.as_array()) {
-        // load connectors once
-        let conn_dir =
-            wp_conf::find_connectors_base_dir(&ctx.work_root.join("sources"), "source.d");
-        let conn_map = conn_dir
-            .as_ref()
-            .and_then(|p| load_connectors_map(p.as_path(), dict))
-            .unwrap_or_default();
-
-        for it in arr {
-            let conn_id = match it.get("connect").and_then(|v| v.as_str()) {
-                Some(id) => id,
-                None => continue, // 不兼容旧写法
-            };
-            let key = it
-                .get("key")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let enabled = it.get("enable").and_then(|v| v.as_bool()).unwrap_or(true);
-
-            // 支持 params_override 与 params 两种写法
-            let ov = it
-                .get("params_override")
-                .or_else(|| it.get("params"))
-                .and_then(|v| v.as_table())
-                .cloned()
-                .unwrap_or_default();
-
-            if let Some(conn) = conn_map.get(conn_id) {
-                if !conn.kind.eq_ignore_ascii_case("file") {
-                    continue;
-                }
-                let ov_map = toml_table_to_param_map(&ov);
-                let merged = merge_params(&conn.default_params, &ov_map, &conn.allow_override)
-                    .unwrap_or_else(|_| conn.default_params.clone());
-
-                let path_str = configured_file_source_path(&merged).unwrap_or_default();
-                if enabled {
-                    match validated_file_source_path(&merged) {
-                        Ok(path_str) => match expand_source_paths(&path_str, &ctx.work_root) {
-                            Ok(paths) => {
-                                let mut source_total = 0u64;
-                                let mut first_err: Option<String> = None;
-                                for path in &paths {
-                                    match count_lines_file(path) {
-                                        Ok(n) => source_total += n,
-                                        Err(e) if first_err.is_none() => {
-                                            first_err = Some(e.to_string());
-                                        }
-                                        Err(_) => {}
-                                    }
+    for source in source_conf.sources {
+        let key = source.key.clone();
+        let enabled = source.enable.unwrap_or(true);
+        let instance = match wp_conf::sources::resolve_source_instance(&source, &conn_map) {
+            Ok(instance) => instance,
+            Err(err) => {
+                let path_str = configured_file_source_path(&source.params).unwrap_or_default();
+                items.push(SrcLineItem {
+                    key,
+                    path: path_str,
+                    enabled,
+                    lines: None,
+                    error: Some(err.display_chain()),
+                });
+                continue;
+            }
+        };
+        if !instance.core.kind.eq_ignore_ascii_case("file") {
+            continue;
+        }
+        let path_str = configured_file_source_path(&instance.core.params).unwrap_or_default();
+        if enabled {
+            match validated_file_source_path(&instance.core.params) {
+                Ok(path_str) => match expand_source_paths(&path_str, &ctx.work_root) {
+                    Ok(paths) => {
+                        let mut source_total = 0u64;
+                        let mut first_err: Option<String> = None;
+                        for path in &paths {
+                            match count_lines_file(path) {
+                                Ok(n) => source_total += n,
+                                Err(e) if first_err.is_none() => {
+                                    first_err = Some(e.to_string());
                                 }
-                                if first_err.is_none() {
-                                    total += source_total;
-                                    items.push(SrcLineItem {
-                                        key,
-                                        path: path_str,
-                                        enabled,
-                                        lines: Some(source_total),
-                                        error: None,
-                                    });
-                                } else {
-                                    items.push(SrcLineItem {
-                                        key,
-                                        path: path_str,
-                                        enabled,
-                                        lines: None,
-                                        error: first_err,
-                                    });
-                                }
+                                Err(_) => {}
                             }
-                            Err(err_msg) => {
-                                items.push(SrcLineItem {
-                                    key,
-                                    path: path_str,
-                                    enabled,
-                                    lines: None,
-                                    error: Some(err_msg),
-                                });
-                            }
-                        },
-                        Err(err) => {
+                        }
+                        if first_err.is_none() {
+                            total += source_total;
+                            items.push(SrcLineItem {
+                                key,
+                                path: path_str,
+                                enabled,
+                                lines: Some(source_total),
+                                error: None,
+                            });
+                        } else {
                             items.push(SrcLineItem {
                                 key,
                                 path: path_str,
                                 enabled,
                                 lines: None,
-                                error: Some(err.to_string()),
+                                error: first_err,
                             });
                         }
                     }
-                } else {
+                    Err(err_msg) => {
+                        items.push(SrcLineItem {
+                            key,
+                            path: path_str,
+                            enabled,
+                            lines: None,
+                            error: Some(err_msg.to_string()),
+                        });
+                    }
+                },
+                Err(err) => {
                     items.push(SrcLineItem {
                         key,
                         path: path_str,
                         enabled,
                         lines: None,
-                        error: None,
+                        error: Some(format!("{} ({})", err, wpsrc_path.display())),
                     });
                 }
             }
+        } else {
+            items.push(SrcLineItem {
+                key,
+                path: path_str,
+                enabled,
+                lines: None,
+                error: None,
+            });
         }
-        return Some(SrcLineReport {
-            total_enabled_lines: total,
-            items,
-        });
     }
-    None
+    Ok(Some(SrcLineReport {
+        total_enabled_lines: total,
+        items,
+    }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::expand_source_paths;
+    use std::path::Path;
+
+    #[test]
+    fn expand_source_paths_reports_invalid_glob_with_context() {
+        let err = expand_source_paths("[", Path::new("/tmp"))
+            .expect_err("invalid glob pattern should fail");
+        let msg = format!("{:#}", err);
+
+        assert!(msg.contains("invalid glob pattern"));
+        assert!(msg.contains("["));
+    }
 }

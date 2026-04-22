@@ -1,7 +1,6 @@
 use super::ConfDelegate;
 use crate::facade::config::{ENGINE_CONF_FILE, WPARSE_LOG_PATH};
 use crate::orchestrator::config::WPSRC_TOML;
-use crate::types::AnyResult;
 use futures_util::TryFutureExt;
 use orion_conf::error::{ConfIOReason, OrionConfResult};
 use orion_conf::{EnvTomlLoad, ErrorOwe, ToStructError, TomlIO};
@@ -16,6 +15,7 @@ use wp_conf::structure::ConfStdOperation;
 use wp_conf::utils::{backup_clean, save_conf, save_data};
 use wp_error::config_error::ConfResult;
 use wp_error::error_handling::target;
+use wp_error::run_error::{RunReason, RunResult};
 
 #[derive(Clone)]
 pub struct WarpConf {
@@ -110,12 +110,25 @@ impl WarpConf {
     }
 
     /// 清理工作目录中的配置文件
-    pub fn cleanup_work_directory(&self, dict: &EnvDict) -> AnyResult<()> {
-        let wp_conf = EngineConfig::load_or_init(self.work_root(), dict)?
+    pub fn cleanup_work_directory(&self, dict: &EnvDict) -> RunResult<()> {
+        let wp_conf = EngineConfig::load_or_init(self.work_root(), dict)
+            .map_err(|e| {
+                RunReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("load engine config for cleanup failed: {}", e))
+            })?
             .env_eval(dict)
             .conf_absolutize(self.work_root());
-        backup_clean(self.config_path_string(ENGINE_CONF_FILE))?;
-        backup_clean(wp_conf.src_conf_of(WPSRC_TOML))?;
+        backup_clean(self.config_path_string(ENGINE_CONF_FILE)).map_err(|e| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("cleanup engine config backup failed: {}", e))
+        })?;
+        backup_clean(wp_conf.src_conf_of(WPSRC_TOML)).map_err(|e| {
+            RunReason::from_conf()
+                .to_err()
+                .with_detail(format!("cleanup source config backup failed: {}", e))
+        })?;
         // PUBLIC_ADM 废弃：不再清理 public.oml
         // 默认清理 connectors default + models templates（wpsrc）
         {
@@ -123,9 +136,17 @@ impl WarpConf {
             if let Some(conn_path) =
                 connector_template_by_id(&self.work_root().join("connectors/source.d"), "file_src")
             {
-                backup_clean(conn_path)?;
+                backup_clean(conn_path).map_err(|e| {
+                    RunReason::from_conf()
+                        .to_err()
+                        .with_detail(format!("cleanup source connector backup failed: {}", e))
+                })?;
             }
-            backup_clean(wp_conf.src_conf_of(WPSRC_TOML))?;
+            backup_clean(wp_conf.src_conf_of(WPSRC_TOML)).map_err(|e| {
+                RunReason::from_conf()
+                    .to_err()
+                    .with_detail(format!("cleanup source config backup failed: {}", e))
+            })?;
         }
         Ok(())
     }

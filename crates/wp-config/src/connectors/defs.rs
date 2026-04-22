@@ -3,6 +3,7 @@ use serde_json::Value as JsonValue;
 use wp_connector_api::{ConnectorDef, ParamMap};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ConnectorTomlFile {
     #[serde(default)]
     pub connectors: Vec<ConnectorDef>,

@@ -1,7 +1,6 @@
-use anyhow::Result;
 use glob::glob;
 use orion_conf::error::OrionConfResult;
-use orion_error::ErrorOwe;
+use orion_error::{ErrorOwe, ErrorOweSource, ErrorWith, UvsFrom, WrapStructError};
 use orion_variate::EnvDict;
 use std::path::{Path, PathBuf};
 use wp_conf::structure::SinkInstanceConf;
@@ -9,7 +8,7 @@ use wp_engine::facade::config::{WarpConf, WpGenResolved};
 use wp_engine::facade::generator::SampleGRA;
 use wp_engine::runtime::generator::run_rule_direct;
 use wp_engine::runtime::generator::run_sample_direct;
-use wp_error::run_error::RunResult;
+use wp_error::run_error::{RunReason, RunResult};
 use wp_log::info_ctrl;
 
 /// 加载 wpgen 配置并解析输出；支持命令行覆盖输出到文件路径
@@ -129,7 +128,7 @@ pub fn clean_wpgen_output_file(
     conf_name: &str,
     local_only: bool,
     dict: &EnvDict,
-) -> Result<GenCleanReport> {
+) -> RunResult<GenCleanReport> {
     if !local_only {
         return Ok(GenCleanReport {
             message: Some("local_only=false (skip)".to_string()),
@@ -137,44 +136,38 @@ pub fn clean_wpgen_output_file(
         });
     }
     let god = WarpConf::new(work_root);
-    match load_wpgen_resolved(conf_name, &god, dict) {
-        Ok(conf) => {
-            if let Some(p) = conf.out_sink.resolve_file_path() {
-                let full_path = absolute_output_path(work_root, &p);
-                let targets = cleanup_targets(&conf, work_root);
-                let mut existed = false;
-                let mut cleaned_any = false;
-                let mut remove_failed = false;
-                for target in targets {
-                    if target.exists() {
-                        existed = true;
-                        match std::fs::remove_file(&target) {
-                            Ok(_) => cleaned_any = true,
-                            Err(_) => remove_failed = true,
-                        }
-                    }
-                }
-                Ok(GenCleanReport {
-                    path: Some(full_path.to_string_lossy().to_string()),
-                    existed,
-                    cleaned: cleaned_any && !remove_failed,
-                    message: None,
-                })
-            } else {
-                Ok(GenCleanReport {
-                    path: None,
-                    existed: false,
-                    cleaned: false,
-                    message: Some("output target is not a file sink".to_string()),
-                })
+    let conf = load_wpgen_resolved(conf_name, &god, dict).map_err(|e| {
+        e.wrap(RunReason::from_conf())
+            .with(format!("load {conf_name}"))
+    })?;
+    if let Some(p) = conf.out_sink.resolve_file_path() {
+        let full_path = absolute_output_path(work_root, &p);
+        let targets = cleanup_targets(&conf, work_root);
+        let mut existed = false;
+        let mut cleaned_any = false;
+        for target in targets {
+            if target.exists() {
+                existed = true;
+                std::fs::remove_file(&target)
+                    .owe_conf_source()
+                    .with(&target)
+                    .want("remove wpgen output")?;
+                cleaned_any = true;
             }
         }
-        Err(_e) => Ok(GenCleanReport {
+        Ok(GenCleanReport {
+            path: Some(full_path.to_string_lossy().to_string()),
+            existed,
+            cleaned: cleaned_any,
+            message: None,
+        })
+    } else {
+        Ok(GenCleanReport {
             path: None,
             existed: false,
             cleaned: false,
-            message: Some(format!("config '{}' not found or invalid", conf_name)),
-        }),
+            message: Some("output target is not a file sink".to_string()),
+        })
     }
 }
 

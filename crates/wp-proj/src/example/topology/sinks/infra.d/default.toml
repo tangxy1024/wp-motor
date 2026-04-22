@@ -9,7 +9,6 @@ batch_timeout_ms = 300
 connect = "file_proto_sink"
 [sink_group.sinks.params]
 file = "default.dat"
-sync = false
 
 [sink_group.sinks.expect]
 ratio = 0.0

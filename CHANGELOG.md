@@ -21,6 +21,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **OML/Take**: 修复 `take(...)` 只能从源记录取值的问题，现支持消费当前目标记录中已生成的字段，使前序 OML 字段可以被后续 `take(...)` 正确移动复用。
 - **OML/SQL Parser**: 修复严格 SQL 模式下对 `group_concat(distinct ...)` 这类聚合表达式的校验与解析，并支持 `IN (@sip, @dip)`、`in(@sip, @dip)` 这类引用参数写法。
+## [1.20.4 Unreleased]
+
+### Added
+- **Error Handling/Docs**: Add structured error-system design and review checklist documentation
+- **wp-proj/Templates**: Add commented VictoriaLogs/VictoriaMetrics infra sink examples to generated route templates
+
+### Changed
+- **Error Handling**: Improve shared CLI diagnostics and preserve upstream source chains across config, source, sink, generator, recovery, monitor, and project-management boundaries
+- **Config Loading**: Align source/sink/wpgen loading and validation with the unified loader contract, including env evaluation, path context, and structured validation details
+- **Observability**: Return structured item-level diagnostics for source/sink stats and validation failures such as invalid connectors, disallowed overrides, unreadable files, and line-count errors
+
+### Fixed
+- **CLI/Error Output**: Fix terse `wpgen`, `wproj`, and `wprescue` configuration errors so they include actionable detail and source-chain context
+- **Runtime**: Surface recovery checkpoint and monitor sink failures as structured errors instead of flattening or only logging them
+- **Tests**: Update config, observability, source-stat, and knowledge tests to assert stable diagnostic semantics
+
+## [1.20.3] - 2026-04-16
+
+### Fixed
+- **Runtime/Stats**: Fix backpressure caused by excessive statistical slicing
+
+## [1.20.2] - 2026-04-16
+
+### Changed
+- **CI/GitHub Actions**: Enable the main CI workflow on `hotfix/*` branches so maintenance releases run the same workflow checks as the main release line
+
+### Fixed
+- **Config Schema/Tests**: Update generated sink defaults fixtures and test configs to match strict `deny_unknown_fields` schemas, removing invalid `version = "2.0"` headers from `defaults.toml`-style files
+- **Observability Validation**: Fix observability validation tests to load sink defaults from schema-valid fixtures under the strict config layout
 
 ## [1.20.0] - 2026-04-11
 

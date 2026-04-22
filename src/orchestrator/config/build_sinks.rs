@@ -13,13 +13,12 @@ use crate::sinks::SinkRuntime;
 use crate::sinks::FileSink;
 use crate::sinks::FormatAdapter;
 use crate::sinks::SinkBackendType;
-use crate::types::AnyResult;
 use orion_overload::append::Appendable;
 use wp_conf::limits::parser_channel_cap;
 use wp_conf::structure::FileSinkConf;
 use wp_conf::structure::SinkInstanceConf;
 use wp_conf::structure::{FlexGroup, SinkGroupConf};
-use wp_connector_api::SinkBuildCtx;
+use wp_connector_api::{SinkBuildCtx, SinkResult};
 use wp_error::run_error::{RunReason, RunResult};
 use wp_model_core::model::fmt_def::TextFmt;
 use wp_stat::StatReq;
@@ -34,7 +33,7 @@ pub const CMD_CHANNEL_MAX: usize = 10000;
 
 // Note: legacy sync entry removed; runtime uses async sinks
 
-pub fn fmt_file(out_file: &FileSinkConf, fmt: TextFmt) -> AnyResult<FormatAdapter<FileSink>> {
+pub fn fmt_file(out_file: &FileSinkConf, fmt: TextFmt) -> SinkResult<FormatAdapter<FileSink>> {
     let out_path = out_file.path.clone();
     let mut pipe: FormatAdapter<FileSink> = FormatAdapter::new(fmt);
     pipe.next_pipe(FileSink::new(&out_path)?);
@@ -42,7 +41,10 @@ pub fn fmt_file(out_file: &FileSinkConf, fmt: TextFmt) -> AnyResult<FormatAdapte
 }
 
 #[allow(dead_code)]
-pub(crate) fn fmt_file_by_path(out_file: &str, fmt: TextFmt) -> AnyResult<FormatAdapter<FileSink>> {
+pub(crate) fn fmt_file_by_path(
+    out_file: &str,
+    fmt: TextFmt,
+) -> SinkResult<FormatAdapter<FileSink>> {
     let mut pipe: FormatAdapter<FileSink> = FormatAdapter::new(fmt);
     pipe.next_pipe(FileSink::new(out_file)?);
     Ok(pipe)

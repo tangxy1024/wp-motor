@@ -4,7 +4,6 @@ use crate::core::parser::indexing::ResourceIndexer;
 use crate::orchestrator::config::WPARSE_OML_FILE;
 use crate::orchestrator::config::WPARSE_RULE_FILE;
 use crate::orchestrator::engine::definition::WplCodePKG;
-use crate::types::AnyResult;
 use orion_error::ErrorOwe;
 use std::thread;
 use wp_conf::engine::EngineConfig;
@@ -50,7 +49,7 @@ pub fn code_ins_parse_units(
     alloc: impl ParserResAlloc,
     lang_pkg: &WplPackage,
     idx: &mut ResourceIndexer,
-) -> AnyResult<Vec<WplPipeline>> {
+) -> RunResult<Vec<WplPipeline>> {
     debug_ctrl!("thread: {:?}, load rule ", thread::current().id(),);
     let mut items = Vec::new();
     for rule in lang_pkg.rules.iter() {

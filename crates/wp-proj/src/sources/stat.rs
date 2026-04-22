@@ -36,7 +36,10 @@ pub fn stat_file_sources(work_root: &str, dict: &EnvDict) -> RunResult<SourceSta
     let ctx = Ctx::new(resolved.clone());
 
     // Gather statistics from file sources using business layer
-    let report = wp_cli_core::list_file_sources_with_lines(Path::new(&resolved), &main, &ctx, dict);
+    let report = wp_cli_core::list_file_sources_with_lines(Path::new(&resolved), &main, &ctx, dict)
+        .owe_conf()
+        .with(resolved.as_str())
+        .want("collect source file stats")?;
 
     // Return the statistics result
     Ok(SourceStatResult {

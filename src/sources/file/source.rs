@@ -11,9 +11,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::task::JoinHandle;
-use wp_connector_api::{
-    DataSource, SourceBatch, SourceError, SourceEvent, SourceReason, SourceResult, Tags,
-};
+use wp_connector_api::{DataSource, SourceBatch, SourceEvent, SourceReason, SourceResult, Tags};
 use wp_model_core::raw::RawData;
 
 #[derive(Debug, Clone)]
@@ -50,20 +48,31 @@ impl FileSource {
         use std::path::Path;
         let file_path = Path::new(path);
         if !file_path.exists() {
-            return Err(SourceReason::from_conf().to_err());
+            return Err(SourceReason::from_conf()
+                .to_err()
+                .with_detail(format!("source file not found: {}", file_path.display()))
+                .with(file_path));
         }
         let mut file = tokio::fs::File::open(file_path)
             .await
-            .map_err(|e| SourceError::from(SourceReason::Disconnect(e.to_string())))
+            .map_err(|e| {
+                SourceReason::Disconnect("open source file failed".to_string())
+                    .to_err()
+                    .with_source(e)
+            })
             .with(file_path)
             .want("open source file")?;
         use std::io::SeekFrom;
         use tokio::io::AsyncSeekExt;
         file.seek(SeekFrom::Start(range_start))
             .await
-            .map_err(|e| SourceError::from(SourceReason::Disconnect(e.to_string())))
+            .map_err(|e| {
+                SourceReason::Disconnect("seek source file failed".to_string())
+                    .to_err()
+                    .with_source(e)
+            })
             .with(file_path)
-            .want("seek to posion")?;
+            .want("seek to position")?;
         tags.set("access_source", path.to_string());
         let batch_lines = DEFAULT_BATCH_LINES;
         let batch_bytes_budget = DEFAULT_BATCH_BYTES;
@@ -84,26 +93,22 @@ impl FileSource {
         match encode {
             FileEncoding::Text => Ok(RawData::Bytes(Bytes::from(line))),
             FileEncoding::Base64 => {
-                let s = std::str::from_utf8(&line).map_err(|_| {
-                    SourceError::from(SourceReason::SupplierError(
-                        "invalid utf8 in base64 text".to_string(),
-                    ))
+                let s = std::str::from_utf8(&line).map_err(|e| {
+                    SourceReason::SupplierError("invalid utf8 in base64 text".to_string())
+                        .err_source(e)
                 })?;
-                let val = general_purpose::STANDARD.decode(s.trim()).map_err(|_| {
-                    SourceError::from(SourceReason::SupplierError(
-                        "base64 decode error".to_string(),
-                    ))
+                let val = general_purpose::STANDARD.decode(s.trim()).map_err(|e| {
+                    SourceReason::SupplierError("base64 decode error".to_string()).err_source(e)
                 })?;
                 Ok(RawData::Bytes(Bytes::from(val)))
             }
             FileEncoding::Hex => {
-                let s = std::str::from_utf8(&line).map_err(|_| {
-                    SourceError::from(SourceReason::SupplierError(
-                        "invalid utf8 in hex text".to_string(),
-                    ))
+                let s = std::str::from_utf8(&line).map_err(|e| {
+                    SourceReason::SupplierError("invalid utf8 in hex text".to_string())
+                        .err_source(e)
                 })?;
-                let val = hex::decode(s.trim()).map_err(|_| {
-                    SourceError::from(SourceReason::SupplierError("hex decode error".to_string()))
+                let val = hex::decode(s.trim()).map_err(|e| {
+                    SourceReason::SupplierError("hex decode error".to_string()).err_source(e)
                 })?;
                 Ok(RawData::Bytes(Bytes::from(val)))
             }
@@ -160,9 +165,13 @@ impl MultiFileSource {
             return Ok(false);
         };
         let ranges = compute_file_ranges(Path::new(&path), self.instances)
-            .map_err(|e| SourceError::from(SourceReason::Disconnect(e.to_string())))
+            .map_err(|e| {
+                SourceReason::Disconnect("compute file ranges failed".to_string())
+                    .to_err()
+                    .with_source(e)
+            })
             .with(path.as_str())
-            .want("open source file")?;
+            .want("compute source file ranges")?;
         let (tx, rx) = unbounded_channel();
         let shard_total = ranges.len();
         let mut tasks = Vec::with_capacity(shard_total);

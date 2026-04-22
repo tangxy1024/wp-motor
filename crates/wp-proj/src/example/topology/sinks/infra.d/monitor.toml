@@ -10,7 +10,11 @@ connect = "file_proto_sink"
 
 [sink_group.sinks.params]
 file = "monitor.dat"
-sync = true
 
 [sink_group.sinks.expect]
 max = 1.0
+
+# To export monitor metrics to VictoriaMetrics, uncomment and tune the sink below.
+#[[sink_group.sinks]]
+#name = "victoriametrics"
+#connect = "victoriametrics_sink"

@@ -10,7 +10,6 @@ use crate::core::sinks::sync_sink::RecSyncSink;
 use crate::runtime::actor::constants::ACTOR_IDLE_TICK_MS;
 use tokio::time::{MissedTickBehavior, interval, sleep};
 
-use orion_error::ErrorOwe;
 use wp_stat::ReportVariant;
 use wp_stat::StatReq;
 
